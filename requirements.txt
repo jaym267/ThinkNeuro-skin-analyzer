@@ -1,0 +1,4 @@
+groq
+streamlit
+pillow
+python-dotenv
