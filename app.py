@@ -32,7 +32,7 @@ st.markdown("""
         margin-bottom: 2rem;
     }
     .result-box {
-        background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+        background: transparent;
         border-radius: 15px;
         padding: 20px;
         margin: 10px 0;
