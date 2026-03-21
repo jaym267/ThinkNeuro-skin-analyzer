@@ -54,7 +54,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<<h1 class="main-header" style="font-size:3.5rem; text-decoration:none;">🔬 Skin Infection Analyzer AI</h1>', unsafe_allow_html=True)
+st.markdown('<<h1 class="main-header" style="font-size:3.5rem; text-decoration:none;"🔬 Skin Infection Analyzer AI</h1>', unsafe_allow_html=True)
 st.markdown('<p class="sub-header">Upload a photo of your skin and get an instant AI-powered analysis</p>', unsafe_allow_html=True)
 
 st.warning("""
