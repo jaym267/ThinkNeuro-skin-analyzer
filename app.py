@@ -17,14 +17,14 @@ st.set_page_config(
 st.markdown("""
     <style>
     .main-header {
-        font-size: 3.5rem;
-        font-weight: 800;
-        background: linear-gradient(90deg, #6C63FF, #48C9B0, #76D7C4);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        padding: 1rem 0;
+    font-size: 3.5rem;
+    font-weight: 800;
+    color: #48C9B0;
+    text-align: center;
+    padding: 1rem 0;
+    text-decoration: none;
     }
+
     .sub-header {
         font-size: 1.1rem;
         color: #666;
