@@ -19,7 +19,7 @@ st.markdown("""
     .main-header {
     font-size: 3.5rem;
     font-weight: 800;
-    color: #2C7873;
+    color: #48C9B0;
     text-align: center;
     padding: 1rem 0;
     text-decoration: none;
@@ -51,8 +51,6 @@ st.markdown("""
         background: linear-gradient(90deg, #48C9B0, #76D7C4);
         transform: scale(1.02);
     }
-            .stApp {
-            background-color: #EEF5FF !important;}
     </style>
 """, unsafe_allow_html=True)
 
