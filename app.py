@@ -52,7 +52,7 @@ st.markdown("""
         transform: scale(1.02);
     }
             .stApp {
-            background-color: #BFB869 !important;}
+            background-color: #EEF5FF !important;}
     </style>
 """, unsafe_allow_html=True)
 
