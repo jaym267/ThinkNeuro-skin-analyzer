@@ -19,7 +19,7 @@ st.markdown("""
     .main-header {
     font-size: 3.5rem;
     font-weight: 800;
-    color: #48C9B0;
+    color: #2C7873;
     text-align: center;
     padding: 1rem 0;
     text-decoration: none;
