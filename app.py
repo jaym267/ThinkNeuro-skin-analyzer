@@ -51,6 +51,8 @@ st.markdown("""
         background: linear-gradient(90deg, #48C9B0, #76D7C4);
         transform: scale(1.02);
     }
+            .stApp {
+            background-color: #BFB869 !important;}
     </style>
 """, unsafe_allow_html=True)
 
