@@ -6,6 +6,7 @@ import base64
 import datetime
 import io
 import streamlit as st
+import streamlit.components.v1 as components
 from PIL import Image
 from groq import Groq
 from dotenv import load_dotenv
@@ -648,7 +649,8 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
   fill: #555555 !important;
 }
 /* browse files button */
-[data-testid="stFileUploaderDropzoneButton"] {
+[data-testid="stFileUploaderDropzoneButton"],
+[data-testid="stFileUploaderDropzoneButton"] button {
   background: #FFFFFF !important;
   background-color: #FFFFFF !important;
   background-image: none !important;
@@ -657,29 +659,17 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
   border-radius: 8px !important;
   padding: .45rem 1.1rem !important;
   font-family: 'Times New Roman', Times, Georgia, serif !important;
-  font-size: 0 !important;
+  font-size: .85rem !important;
   font-weight: 600 !important;
   cursor: pointer !important;
   white-space: nowrap !important;
   overflow: hidden !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
   box-shadow: none !important;
 }
-[data-testid="stFileUploaderDropzoneButton"]:hover {
+[data-testid="stFileUploaderDropzoneButton"]:hover,
+[data-testid="stFileUploaderDropzoneButton"] button:hover {
   background: #F0F0F0 !important;
   background-color: #F0F0F0 !important;
-  background-image: none !important;
-}
-/* only the visible label element gets a real font size */
-[data-testid="stFileUploaderDropzoneButton"] p,
-[data-testid="stFileUploaderDropzoneButton"] div,
-[data-testid="stFileUploaderDropzoneButton"] span:last-of-type {
-  font-size: .85rem !important;
-  color: #111111 !important;
-  background: transparent !important;
-  line-height: 1 !important;
 }
 
 /* ── SIDEBAR ── */
@@ -1055,6 +1045,44 @@ if st.session_state.current_analysis is None:
             type=["jpg", "jpeg", "png", "webp"],
             label_visibility="collapsed",
         )
+
+        components.html("""
+<script>
+(function() {
+  function fix() {
+    try {
+      var doc = window.parent.document;
+      var btn = doc.querySelector('[data-testid="stFileUploaderDropzoneButton"]');
+      if (!btn) return;
+      var leaves = [];
+      btn.querySelectorAll('*').forEach(function(el) {
+        if (el.children.length === 0 && el.textContent.trim()) {
+          leaves.push(el);
+        }
+      });
+      if (leaves.length > 1) {
+        for (var i = 0; i < leaves.length - 1; i++) {
+          leaves[i].style.setProperty('display', 'none', 'important');
+          leaves[i].style.setProperty('visibility', 'hidden', 'important');
+          leaves[i].style.setProperty('font-size', '0', 'important');
+          leaves[i].style.setProperty('width', '0', 'important');
+          leaves[i].style.setProperty('height', '0', 'important');
+          leaves[i].style.setProperty('position', 'absolute', 'important');
+        }
+      }
+    } catch(e) {}
+  }
+  fix();
+  [200, 500, 1000, 2000].forEach(function(t){ setTimeout(fix, t); });
+  try {
+    new MutationObserver(fix).observe(
+      window.parent.document.body,
+      { childList: true, subtree: true }
+    );
+  } catch(e) {}
+})();
+</script>
+""", height=0, scrolling=False)
 
         if uploaded_file:
             img = Image.open(uploaded_file)
