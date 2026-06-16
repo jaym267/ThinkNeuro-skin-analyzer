@@ -646,9 +646,11 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
 [data-testid="stFileUploader"] svg {
   fill: #555555 !important;
 }
-/* browse files button */
-[data-testid="stFileUploaderDropzoneButton"] {
+/* browse files button — target wrapper AND the inner <button> tag */
+[data-testid="stFileUploaderDropzoneButton"],
+[data-testid="stFileUploaderDropzoneButton"] button {
   background: #FFFFFF !important;
+  background-color: #FFFFFF !important;
   color: #111111 !important;
   border: 1.5px solid #AAAAAA !important;
   border-radius: 8px !important;
@@ -664,22 +666,35 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
   align-items: center !important;
   justify-content: center !important;
   line-height: 1 !important;
+  box-shadow: none !important;
 }
 [data-testid="stFileUploaderDropzoneButton"]:hover,
 [data-testid="stFileUploaderDropzoneButton"]:focus,
-[data-testid="stFileUploaderDropzoneButton"]:active {
+[data-testid="stFileUploaderDropzoneButton"]:active,
+[data-testid="stFileUploaderDropzoneButton"] button:hover,
+[data-testid="stFileUploaderDropzoneButton"] button:focus,
+[data-testid="stFileUploaderDropzoneButton"] button:active {
   background: #F5F5F5 !important;
+  background-color: #F5F5F5 !important;
   border-color: #777777 !important;
 }
 [data-testid="stFileUploaderDropzoneButton"]::before,
-[data-testid="stFileUploaderDropzoneButton"]::after {
+[data-testid="stFileUploaderDropzoneButton"]::after,
+[data-testid="stFileUploaderDropzoneButton"] button::before,
+[data-testid="stFileUploaderDropzoneButton"] button::after {
   display: none !important;
   background: transparent !important;
   content: none !important;
 }
 [data-testid="stFileUploaderDropzoneButton"] p,
-[data-testid="stFileUploaderDropzoneButton"] span {
+[data-testid="stFileUploaderDropzoneButton"] span,
+[data-testid="stFileUploaderDropzoneButton"] div,
+[data-testid="stFileUploaderDropzoneButton"] button p,
+[data-testid="stFileUploaderDropzoneButton"] button span,
+[data-testid="stFileUploaderDropzoneButton"] button div {
   color: #111111 !important;
+  background: transparent !important;
+  background-color: transparent !important;
   font-family: 'Times New Roman', Times, Georgia, serif !important;
   line-height: 1 !important;
   margin: 0 !important;
