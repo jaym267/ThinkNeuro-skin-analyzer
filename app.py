@@ -648,9 +648,7 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
   fill: #555555 !important;
 }
 /* browse files button */
-[data-testid="stFileUploaderDropzoneButton"],
-[data-testid="stFileUploaderDropzoneButton"]:link,
-[data-testid="stFileUploaderDropzoneButton"]:visited {
+[data-testid="stFileUploaderDropzoneButton"] {
   background: #FFFFFF !important;
   background-color: #FFFFFF !important;
   background-image: none !important;
@@ -659,37 +657,29 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
   border-radius: 8px !important;
   padding: .45rem 1.1rem !important;
   font-family: 'Times New Roman', Times, Georgia, serif !important;
-  font-size: .85rem !important;
+  font-size: 0 !important;
   font-weight: 600 !important;
   cursor: pointer !important;
   white-space: nowrap !important;
   overflow: hidden !important;
-  text-overflow: clip !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  line-height: 1 !important;
   box-shadow: none !important;
 }
-[data-testid="stFileUploaderDropzoneButton"]:hover,
-[data-testid="stFileUploaderDropzoneButton"]:focus,
-[data-testid="stFileUploaderDropzoneButton"]:active {
+[data-testid="stFileUploaderDropzoneButton"]:hover {
   background: #F0F0F0 !important;
   background-color: #F0F0F0 !important;
   background-image: none !important;
-  color: #111111 !important;
 }
-[data-testid="stFileUploaderDropzoneButton"] *,
-[data-testid="stFileUploaderDropzoneButton"] *::before,
-[data-testid="stFileUploaderDropzoneButton"] *::after,
-[data-testid="stFileUploaderDropzoneButton"]::before,
-[data-testid="stFileUploaderDropzoneButton"]::after {
-  background: transparent !important;
-  background-color: transparent !important;
-  background-image: none !important;
+/* only the visible label element gets a real font size */
+[data-testid="stFileUploaderDropzoneButton"] p,
+[data-testid="stFileUploaderDropzoneButton"] div,
+[data-testid="stFileUploaderDropzoneButton"] span:last-of-type {
+  font-size: .85rem !important;
   color: #111111 !important;
-  box-shadow: none !important;
-  content: none !important;
+  background: transparent !important;
+  line-height: 1 !important;
 }
 
 /* ── SIDEBAR ── */
