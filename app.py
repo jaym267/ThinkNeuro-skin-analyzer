@@ -627,37 +627,53 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
   background: var(--white) !important;
   border: 2px dashed var(--border2) !important;
   border-radius: 14px !important;
-  transition: border-color .2s, background .2s !important;
+  transition: border-color .2s !important;
 }
 [data-testid="stFileUploader"]:hover {
   border-color: var(--navy-mid) !important;
-  background: var(--white) !important;
-}
-[data-testid="stFileUploader"] * {
-  color: var(--txt0) !important;
-  font-family: 'Times New Roman', Times, Georgia, serif !important;
 }
 [data-testid="stFileUploaderDropzone"] {
   background: var(--white) !important;
 }
-[data-testid="stFileUploaderDropzoneInstructions"] {
-  color: var(--txt0) !important;
-}
+/* instruction text and file type label */
 [data-testid="stFileUploaderDropzoneInstructions"] span,
 [data-testid="stFileUploaderDropzoneInstructions"] div,
 [data-testid="stFileUploaderDropzoneInstructions"] small,
 [data-testid="stFileUploaderDropzoneInstructions"] p {
   color: var(--txt0) !important;
+  font-family: 'Times New Roman', Times, Georgia, serif !important;
 }
 [data-testid="stFileUploader"] svg {
-  fill: var(--txt0) !important;
-  color: var(--txt0) !important;
+  fill: var(--txt1) !important;
 }
-[data-testid="stFileUploader"] button {
+/* browse files button — target by data attribute to avoid conflicts */
+[data-testid="stFileUploaderDropzoneButton"] {
   background: var(--navy) !important;
   color: #FFFFFF !important;
   border: none !important;
   border-radius: 8px !important;
+  padding: .45rem 1.1rem !important;
+  font-family: 'Times New Roman', Times, Georgia, serif !important;
+  font-size: .85rem !important;
+  font-weight: 700 !important;
+  letter-spacing: .4px !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: clip !important;
+  min-width: 0 !important;
+  width: auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+[data-testid="stFileUploaderDropzoneButton"]:hover {
+  background: var(--navy-mid) !important;
+}
+[data-testid="stFileUploaderDropzoneButton"] p,
+[data-testid="stFileUploaderDropzoneButton"] span {
+  color: #FFFFFF !important;
+  font-family: 'Times New Roman', Times, Georgia, serif !important;
 }
 
 /* ── SIDEBAR ── */
