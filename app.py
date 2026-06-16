@@ -623,57 +623,59 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
 }
 
 /* ── FILE UPLOADER ── */
-[data-testid="stFileUploader"] {
-  background: var(--white) !important;
-  border: 2px dashed var(--border2) !important;
+[data-testid="stFileUploader"],
+[data-testid="stFileUploaderDropzone"] {
+  background: #FFFFFF !important;
+  border: 2px dashed #CCCCCC !important;
   border-radius: 14px !important;
   transition: border-color .2s !important;
 }
 [data-testid="stFileUploader"]:hover {
-  border-color: var(--navy-mid) !important;
+  border-color: #999999 !important;
 }
-[data-testid="stFileUploaderDropzone"] {
-  background: var(--white) !important;
-}
-/* instruction text and file type label */
-[data-testid="stFileUploaderDropzoneInstructions"] span,
-[data-testid="stFileUploaderDropzoneInstructions"] div,
-[data-testid="stFileUploaderDropzoneInstructions"] small,
-[data-testid="stFileUploaderDropzoneInstructions"] p {
-  color: var(--txt0) !important;
+/* all text inside the upload box */
+[data-testid="stFileUploaderDropzoneInstructions"],
+[data-testid="stFileUploaderDropzoneInstructions"] *,
+[data-testid="stFileUploaderDropzone"] p,
+[data-testid="stFileUploaderDropzone"] span,
+[data-testid="stFileUploaderDropzone"] small,
+[data-testid="stFileUploaderDropzone"] div {
+  color: #111111 !important;
   font-family: 'Times New Roman', Times, Georgia, serif !important;
 }
 [data-testid="stFileUploader"] svg {
-  fill: var(--txt1) !important;
+  fill: #555555 !important;
 }
-/* browse files button — target by data attribute to avoid conflicts */
+/* browse files button */
 [data-testid="stFileUploaderDropzoneButton"] {
-  background: var(--navy) !important;
-  color: #FFFFFF !important;
-  border: none !important;
+  background: #FFFFFF !important;
+  color: #111111 !important;
+  border: 1.5px solid #AAAAAA !important;
   border-radius: 8px !important;
   padding: .45rem 1.1rem !important;
   font-family: 'Times New Roman', Times, Georgia, serif !important;
   font-size: .85rem !important;
-  font-weight: 700 !important;
-  letter-spacing: .4px !important;
+  font-weight: 600 !important;
+  letter-spacing: .3px !important;
   cursor: pointer !important;
   white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: clip !important;
-  min-width: 0 !important;
-  width: auto !important;
+  overflow: visible !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
+  line-height: 1 !important;
 }
 [data-testid="stFileUploaderDropzoneButton"]:hover {
-  background: var(--navy-mid) !important;
+  background: #F5F5F5 !important;
+  border-color: #777777 !important;
 }
 [data-testid="stFileUploaderDropzoneButton"] p,
 [data-testid="stFileUploaderDropzoneButton"] span {
-  color: #FFFFFF !important;
+  color: #111111 !important;
   font-family: 'Times New Roman', Times, Georgia, serif !important;
+  line-height: 1 !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 /* ── SIDEBAR ── */
