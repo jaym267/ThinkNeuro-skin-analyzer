@@ -663,7 +663,8 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
   font-weight: 600 !important;
   cursor: pointer !important;
   white-space: nowrap !important;
-  overflow: visible !important;
+  overflow: hidden !important;
+  text-overflow: clip !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
