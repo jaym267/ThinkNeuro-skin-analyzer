@@ -646,11 +646,11 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
 [data-testid="stFileUploader"] svg {
   fill: #555555 !important;
 }
-/* browse files button — target wrapper AND the inner <button> tag */
-[data-testid="stFileUploaderDropzoneButton"],
-[data-testid="stFileUploaderDropzoneButton"] button {
+/* browse files button */
+html [data-testid="stFileUploaderDropzoneButton"] {
   background: #FFFFFF !important;
   background-color: #FFFFFF !important;
+  background-image: none !important;
   color: #111111 !important;
   border: 1.5px solid #AAAAAA !important;
   border-radius: 8px !important;
@@ -658,7 +658,6 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
   font-family: 'Times New Roman', Times, Georgia, serif !important;
   font-size: .85rem !important;
   font-weight: 600 !important;
-  letter-spacing: .3px !important;
   cursor: pointer !important;
   white-space: nowrap !important;
   overflow: visible !important;
@@ -668,37 +667,27 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
   line-height: 1 !important;
   box-shadow: none !important;
 }
-[data-testid="stFileUploaderDropzoneButton"]:hover,
-[data-testid="stFileUploaderDropzoneButton"]:focus,
-[data-testid="stFileUploaderDropzoneButton"]:active,
-[data-testid="stFileUploaderDropzoneButton"] button:hover,
-[data-testid="stFileUploaderDropzoneButton"] button:focus,
-[data-testid="stFileUploaderDropzoneButton"] button:active {
-  background: #F5F5F5 !important;
-  background-color: #F5F5F5 !important;
-  border-color: #777777 !important;
+html [data-testid="stFileUploaderDropzoneButton"]:hover,
+html [data-testid="stFileUploaderDropzoneButton"]:focus,
+html [data-testid="stFileUploaderDropzoneButton"]:active {
+  background: #F0F0F0 !important;
+  background-color: #F0F0F0 !important;
+  background-image: none !important;
 }
-[data-testid="stFileUploaderDropzoneButton"]::before,
-[data-testid="stFileUploaderDropzoneButton"]::after,
-[data-testid="stFileUploaderDropzoneButton"] button::before,
-[data-testid="stFileUploaderDropzoneButton"] button::after {
-  display: none !important;
-  background: transparent !important;
-  content: none !important;
-}
-[data-testid="stFileUploaderDropzoneButton"] p,
-[data-testid="stFileUploaderDropzoneButton"] span,
-[data-testid="stFileUploaderDropzoneButton"] div,
-[data-testid="stFileUploaderDropzoneButton"] button p,
-[data-testid="stFileUploaderDropzoneButton"] button span,
-[data-testid="stFileUploaderDropzoneButton"] button div {
-  color: #111111 !important;
+/* nuke any dark overlay from children or pseudo-elements */
+html [data-testid="stFileUploaderDropzoneButton"] *,
+html [data-testid="stFileUploaderDropzoneButton"] *::before,
+html [data-testid="stFileUploaderDropzoneButton"] *::after {
   background: transparent !important;
   background-color: transparent !important;
-  font-family: 'Times New Roman', Times, Georgia, serif !important;
-  line-height: 1 !important;
-  margin: 0 !important;
-  padding: 0 !important;
+  background-image: none !important;
+  color: #111111 !important;
+  box-shadow: none !important;
+}
+html [data-testid="stFileUploaderDropzoneButton"]::before,
+html [data-testid="stFileUploaderDropzoneButton"]::after {
+  content: none !important;
+  display: none !important;
 }
 
 /* ── SIDEBAR ── */
