@@ -647,7 +647,9 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
   fill: #555555 !important;
 }
 /* browse files button */
-html [data-testid="stFileUploaderDropzoneButton"] {
+[data-testid="stFileUploaderDropzoneButton"],
+[data-testid="stFileUploaderDropzoneButton"]:link,
+[data-testid="stFileUploaderDropzoneButton"]:visited {
   background: #FFFFFF !important;
   background-color: #FFFFFF !important;
   background-image: none !important;
@@ -667,27 +669,25 @@ html [data-testid="stFileUploaderDropzoneButton"] {
   line-height: 1 !important;
   box-shadow: none !important;
 }
-html [data-testid="stFileUploaderDropzoneButton"]:hover,
-html [data-testid="stFileUploaderDropzoneButton"]:focus,
-html [data-testid="stFileUploaderDropzoneButton"]:active {
+[data-testid="stFileUploaderDropzoneButton"]:hover,
+[data-testid="stFileUploaderDropzoneButton"]:focus,
+[data-testid="stFileUploaderDropzoneButton"]:active {
   background: #F0F0F0 !important;
   background-color: #F0F0F0 !important;
   background-image: none !important;
+  color: #111111 !important;
 }
-/* nuke any dark overlay from children or pseudo-elements */
-html [data-testid="stFileUploaderDropzoneButton"] *,
-html [data-testid="stFileUploaderDropzoneButton"] *::before,
-html [data-testid="stFileUploaderDropzoneButton"] *::after {
+[data-testid="stFileUploaderDropzoneButton"] *,
+[data-testid="stFileUploaderDropzoneButton"] *::before,
+[data-testid="stFileUploaderDropzoneButton"] *::after,
+[data-testid="stFileUploaderDropzoneButton"]::before,
+[data-testid="stFileUploaderDropzoneButton"]::after {
   background: transparent !important;
   background-color: transparent !important;
   background-image: none !important;
   color: #111111 !important;
   box-shadow: none !important;
-}
-html [data-testid="stFileUploaderDropzoneButton"]::before,
-html [data-testid="stFileUploaderDropzoneButton"]::after {
   content: none !important;
-  display: none !important;
 }
 
 /* ── SIDEBAR ── */
