@@ -665,9 +665,17 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
   justify-content: center !important;
   line-height: 1 !important;
 }
-[data-testid="stFileUploaderDropzoneButton"]:hover {
+[data-testid="stFileUploaderDropzoneButton"]:hover,
+[data-testid="stFileUploaderDropzoneButton"]:focus,
+[data-testid="stFileUploaderDropzoneButton"]:active {
   background: #F5F5F5 !important;
   border-color: #777777 !important;
+}
+[data-testid="stFileUploaderDropzoneButton"]::before,
+[data-testid="stFileUploaderDropzoneButton"]::after {
+  display: none !important;
+  background: transparent !important;
+  content: none !important;
 }
 [data-testid="stFileUploaderDropzoneButton"] p,
 [data-testid="stFileUploaderDropzoneButton"] span {
