@@ -826,6 +826,26 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
 }
 [data-testid="stSidebar"] > div { padding-top: 0 !important; }
 
+/* Hide Streamlit's native collapse control — we use our own toggle, and the
+   serif font override turns its Material icon ligature into the stray
+   "keyboard_double_arrow_left" text. */
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarHeader"] [data-testid="stBaseButton-headerNoPadding"],
+[data-testid="stExpandSidebarButton"] {
+  display: none !important;
+}
+
+/* Neutralize Streamlit's native collapse so our custom handle is the ONLY
+   show/hide mechanism. Force a stable expanded width and cancel the native
+   slide-out transform; our JS slides the panel with margin-left instead. */
+[data-testid="stSidebar"],
+[data-testid="stSidebar"][aria-expanded="false"] {
+  transform: none !important;
+  width: 300px !important;
+  min-width: 300px !important;
+  max-width: 300px !important;
+}
+
 .sb-logo {
   padding: 2rem 1.25rem 1.25rem;
   border-bottom: 1px solid var(--border);
@@ -1130,6 +1150,8 @@ components.html("""
 <script>
 (function(){
   var pwin = window.parent, pdoc = pwin.document;
+  // The panel starts hidden on every fresh load so it never blocks the screen.
+  if (pwin.__dermHidden === undefined) pwin.__dermHidden = true;
   function sidebar(){ return pdoc.querySelector('[data-testid="stSidebar"]'); }
 
   function ensureStyles(){
@@ -1140,106 +1162,77 @@ components.html("""
       [data-testid="stSidebar"]{
         transition: margin-left .35s cubic-bezier(0.4,0,0.2,1) !important;
       }
-      #derm-hide-btn{
-        display:flex; align-items:center; justify-content:center; gap:8px;
-        width:calc(100% - 1.5rem); margin:.1rem .75rem 1.5rem; padding:.72rem 1rem;
-        cursor:pointer; background:#FFFFFF; color:#1B3252;
-        border:1px solid #1B3252; border-radius:10px;
-        font-family:'Times New Roman',Times,Georgia,serif;
-        font-size:.7rem; font-weight:700; letter-spacing:1.6px; text-transform:uppercase;
-        transition:background .2s ease,color .2s ease,box-shadow .2s ease;
-      }
-      #derm-hide-btn:hover{
-        background:#1B3252; color:#FFFFFF; box-shadow:0 4px 14px rgba(27,50,82,.25);
-      }
+      /* the single always-visible toggle handle (rides the edge of the panel) */
       #derm-handle{
         position:fixed; top:50%; left:0; transform:translateY(-50%);
-        z-index:1000000; display:none;
+        z-index:1000000; display:flex;
         flex-direction:column; align-items:center; justify-content:center; gap:1px;
         width:30px; height:70px; padding-left:3px;
         background:#1B3252; color:#FFFFFF; border:none;
         border-radius:0 36px 36px 0;
-        cursor:grab; user-select:none; touch-action:none;
+        cursor:pointer; user-select:none;
         box-shadow:3px 2px 16px rgba(27,50,82,.34);
         font-family:'Times New Roman',Times,Georgia,serif;
-        transition:background .2s ease, box-shadow .2s ease;
+        transition:left .35s cubic-bezier(0.4,0,0.2,1), background .2s ease, box-shadow .2s ease;
       }
       #derm-handle:hover{ background:#2A4A72; box-shadow:4px 3px 22px rgba(27,50,82,.44); }
-      #derm-handle.dragging{ cursor:grabbing; transition:background .2s ease; }
-      #derm-handle .chev{ font-size:.92rem; line-height:.78; font-weight:700; opacity:.92; }
-      body.derm-hidden #derm-handle{ display:flex; }
+      #derm-handle .chev{
+        font-size:.92rem; line-height:.78; font-weight:700; opacity:.92;
+        transition:transform .3s ease;
+      }
+      /* when the panel is open, flip the chevrons to point back at it (hide) */
+      #derm-handle.derm-open .chev{ transform:scaleX(-1); }
     `;
     pdoc.head.appendChild(s);
   }
 
+  var PANEL_W = 300;  // matches the fixed sidebar width forced in CSS
+
   function applyState(){
     var sb = sidebar(); if(!sb) return;
+    var handle = pdoc.getElementById('derm-handle');
     var hidden = !!pwin.__dermHidden;
-    var w = sb.getBoundingClientRect().width || 300;
-    var target = hidden ? (-(w+4) + 'px') : '0px';
-    if (sb.style.marginLeft !== target) sb.style.marginLeft = target;
+    var sbTarget = hidden ? (-(PANEL_W + 8) + 'px') : '0px';  // slide panel out / in
+    var hTarget  = hidden ? '0px' : (PANEL_W + 'px');          // handle rides panel edge
+
+    if (!pwin.__dermInit){
+      // first paint after a load: snap into place instantly, no slide
+      sb.style.setProperty('transition', 'none', 'important');
+      sb.style.marginLeft = sbTarget;
+      if (handle){ handle.style.transition = 'none'; handle.style.left = hTarget; }
+      void sb.offsetWidth;                                // force reflow
+      sb.style.removeProperty('transition');
+      if (handle) handle.style.removeProperty('transition');
+      pwin.__dermInit = true;
+    } else {
+      if (sb.style.marginLeft !== sbTarget) sb.style.marginLeft = sbTarget;
+      if (handle && handle.style.left !== hTarget) handle.style.left = hTarget;
+    }
+    if (handle) handle.classList.toggle('derm-open', !hidden);
     pdoc.body.classList.toggle('derm-hidden', hidden);
   }
 
   function setHidden(v){ pwin.__dermHidden = v; applyState(); }
-
-  function ensureHideBtn(){
-    if (pdoc.getElementById('derm-hide-btn')) return;
-    var host = pdoc.querySelector('[data-testid="stSidebarUserContent"]')
-            || pdoc.querySelector('[data-testid="stSidebarContent"]');
-    if (!host) return;
-    var b = pdoc.createElement('button');
-    b.id = 'derm-hide-btn'; b.type = 'button';
-    b.innerHTML = '<span style="font-size:1rem;line-height:1;">&lsaquo;</span> Hide Panel';
-    b.addEventListener('click', function(){ setHidden(true); });
-    host.appendChild(b);
-  }
 
   function ensureHandle(){
     if (pdoc.getElementById('derm-handle')) return;
     var b = pdoc.createElement('div');
     b.id = 'derm-handle';
     b.setAttribute('role', 'button');
-    b.setAttribute('aria-label', 'Show panel');
-    b.setAttribute('title', 'Drag right or click to show the panel');
+    b.setAttribute('tabindex', '0');
+    b.setAttribute('aria-label', 'Show or hide the panel');
+    b.setAttribute('title', 'Show or hide the panel');
     b.innerHTML = '<span class="chev">&gt;</span>'
                 + '<span class="chev">&gt;</span>'
                 + '<span class="chev">&gt;</span>';
-
-    var dragging = false, startX = 0, startLeft = 0, moved = 0;
-    function maxLeft(){ return Math.min(280, (pwin.innerWidth || 900) - 60); }
-
-    b.addEventListener('pointerdown', function(e){
-      dragging = true; moved = 0; startX = e.clientX;
-      startLeft = parseInt(b.style.left || '0', 10) || 0;
-      b.classList.add('dragging');
-      try { b.setPointerCapture(e.pointerId); } catch(err){}
-      e.preventDefault();
+    b.addEventListener('click', function(){ setHidden(!pwin.__dermHidden); });
+    b.addEventListener('keydown', function(e){
+      if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); setHidden(!pwin.__dermHidden); }
     });
-    b.addEventListener('pointermove', function(e){
-      if (!dragging) return;
-      var dx = e.clientX - startX;
-      moved = Math.max(moved, Math.abs(dx));
-      var nl = Math.max(0, Math.min(maxLeft(), startLeft + dx));
-      b.style.left = nl + 'px';
-    });
-    function endDrag(e){
-      if (!dragging) return;
-      dragging = false; b.classList.remove('dragging');
-      var dx = ((e && e.clientX) || startX) - startX;
-      if (moved < 6 || dx > 56){      // a tap, or a deliberate drag to the right
-        setHidden(false);
-        b.style.left = '0px';         // reset for next time
-      }
-      // a small left/partial drag just leaves the handle where it was dropped
-    }
-    b.addEventListener('pointerup', endDrag);
-    b.addEventListener('pointercancel', endDrag);
-
     pdoc.body.appendChild(b);
   }
 
-  function tick(){ ensureStyles(); ensureHandle(); ensureHideBtn(); applyState(); }
+  function tick(){ ensureStyles(); ensureHandle(); applyState(); }
 
   tick();
   [120,300,600,1200].forEach(function(t){ setTimeout(tick, t); });
