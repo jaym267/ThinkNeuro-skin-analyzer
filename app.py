@@ -5,6 +5,8 @@ import re
 import base64
 import datetime
 import io
+import time
+import html as html_lib
 import streamlit as st
 import streamlit.components.v1 as components
 from PIL import Image
@@ -51,9 +53,19 @@ PROB_STYLES = {
 # ──────────────────────────────────────────────
 @st.cache_resource
 def get_client():
+    # Local runs read the key from .env; Streamlit Community Cloud provides it
+    # through the app's Secrets manager (exposed via st.secrets).
     key = os.getenv("GROQ_API_KEY")
     if not key:
-        st.error("GROQ_API_KEY not found. Add it to your .env file.")
+        try:
+            key = st.secrets["GROQ_API_KEY"]
+        except Exception:
+            key = None
+    if not key:
+        st.error(
+            "GROQ_API_KEY not found. Add it to your local .env file, or — when "
+            "deployed on Streamlit Cloud — add it under the app's Secrets."
+        )
         st.stop()
     return Groq(api_key=key)
 
@@ -171,7 +183,12 @@ def analyze_image(img: Image.Image) -> dict:
     )
     return parse_analysis(resp.choices[0].message.content)
 
-def ask_followup(question: str, analysis: dict, img: Image.Image) -> str:
+def ask_followup_stream(analysis: dict, img: Image.Image):
+    """Yield the assistant reply in chunks so it can be typed out live.
+
+    Reads st.session_state.chat_messages, whose final entry is the pending
+    user question; the image is attached to that last turn for vision context.
+    """
     b64 = image_to_base64(img)
     system = (
         "You are a helpful dermatology AI assistant. "
@@ -179,19 +196,27 @@ def ask_followup(question: str, analysis: dict, img: Image.Image) -> str:
         "Answer concisely. Always advise consulting a licensed dermatologist."
     )
     msgs = [{"role": "system", "content": system}]
-    for m in st.session_state.chat_messages:
-        msgs.append({"role": m["role"], "content": m["content"]})
-    msgs.append({"role": "user", "content": [
-        {"type": "text", "text": question},
-        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
-    ]})
-    resp = client.chat.completions.create(
+    history = st.session_state.chat_messages
+    last = len(history) - 1
+    for i, m in enumerate(history):
+        if m["role"] == "user" and i == last:
+            msgs.append({"role": "user", "content": [
+                {"type": "text", "text": m["content"]},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+            ]})
+        else:
+            msgs.append({"role": m["role"], "content": m["content"]})
+    stream = client.chat.completions.create(
         model="meta-llama/llama-4-scout-17b-16e-instruct",
         messages=msgs,
         max_tokens=600,
         temperature=0.4,
+        stream=True,
     )
-    return resp.choices[0].message.content
+    for chunk in stream:
+        delta = chunk.choices[0].delta.content
+        if delta:
+            yield delta
 
 def build_report(analysis: dict, filename: str) -> str:
     now   = datetime.datetime.now().strftime("%B %d, %Y at %H:%M")
@@ -256,6 +281,7 @@ for k, v in {
     "chat_messages":    [],
     "current_analysis": None,
     "current_image":    None,
+    "pending_q":        None,
 }.items():
     if k not in st.session_state:
         st.session_state[k] = v
@@ -521,18 +547,6 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
 .act-title { font-size: 1rem; font-weight: 700; margin-bottom: .4rem; }
 .act-desc  { font-size: .84rem; color: var(--txt1); line-height: 1.7; font-style: italic; }
 
-/* ── RISK TAGS ── */
-.risk-tags { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .7rem; }
-.risk-tag {
-  background: rgba(139,42,42,0.06);
-  border: 1px solid rgba(139,42,42,0.2);
-  color: #8B2A2A;
-  font-size: .71rem;
-  font-weight: 500;
-  padding: 4px 11px;
-  border-radius: 100px;
-}
-
 /* ── CHAT ── */
 .chat-box {
   background: var(--cream);
@@ -581,6 +595,35 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
   box-shadow: var(--sd0);
 }
 
+/* ── CHAT: THINKING + TYPING ── */
+.bubble-ai.thinking { background: var(--white); }
+.think-text {
+  font-style: italic;
+  font-size: .86rem;
+  background: linear-gradient(90deg, #C9C5BE 0%, #1B3252 50%, #C9C5BE 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: think-shimmer 1.7s linear infinite;
+}
+@keyframes think-shimmer {
+  0%   { background-position: 200% center; }
+  100% { background-position: 0% center; }
+}
+.type-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 2px;
+  background: var(--navy);
+  vertical-align: text-bottom;
+  border-radius: 1px;
+  animation: caret-blink 1s steps(1) infinite;
+}
+@keyframes caret-blink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+
 /* ── BUTTONS ── */
 .stButton > button {
   background: var(--navy) !important;
@@ -624,53 +667,156 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
   outline: none !important;
 }
 
-/* ── FILE UPLOADER ── */
-[data-testid="stFileUploader"],
+/* ── UPLOAD PANEL ── */
+.upload-panel {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.4rem 1.6rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--sd0);
+}
+.upload-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.upload-head .g-accent { min-height: 32px; }
+.upload-hint {
+  text-align: center;
+  font-size: .79rem;
+  color: var(--txt2);
+  font-style: italic;
+  line-height: 1.7;
+  margin: 1rem auto 0;
+  max-width: 440px;
+  animation: fadeUp .5s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* ── FILE UPLOADER ──
+   Streamlit 1.55 markup: the dropzone is [data-testid="stFileUploaderDropzone"]
+   and the trigger is [data-testid="stBaseButton-secondary"] inside it.
+   (The old stFileUploaderDropzoneButton selector no longer exists.) */
+[data-testid="stFileUploader"] {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+[data-testid="stFileUploader"] > label { display: none !important; }
+
+/* the drop area itself — tall, centered, calm */
 [data-testid="stFileUploaderDropzone"] {
-  background: #FFFFFF !important;
-  border: 2px dashed #CCCCCC !important;
-  border-radius: 14px !important;
-  transition: border-color .2s !important;
+  background:
+    radial-gradient(120% 140% at 50% 0%, #FFFFFF 0%, var(--cream) 100%) !important;
+  border: 1.5px dashed var(--border2) !important;
+  border-radius: 16px !important;
+  padding: 2.6rem 2rem !important;
+  min-height: 196px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 1.05rem !important;
+  text-align: center !important;
+  box-shadow: var(--sd0) !important;
+  animation: dz-enter .55s cubic-bezier(0.4,0,0.2,1) both;
+  transition: border-color .3s ease, box-shadow .3s ease,
+              transform .3s ease, background .3s ease !important;
 }
-[data-testid="stFileUploader"]:hover {
-  border-color: #999999 !important;
+[data-testid="stFileUploaderDropzone"]:hover {
+  border-color: var(--gold) !important;
+  box-shadow: var(--sd1) !important;
+  transform: translateY(-2px) !important;
 }
-/* all text inside the upload box */
-[data-testid="stFileUploaderDropzoneInstructions"],
+[data-testid="stFileUploaderDropzone"]:focus-within {
+  border-color: var(--navy-mid) !important;
+  box-shadow: 0 0 0 4px rgba(27,50,82,0.10), var(--sd1) !important;
+}
+@keyframes dz-enter {
+  from { opacity: 0; transform: translateY(12px) scale(.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* instructions stack (icon + two text lines) */
+[data-testid="stFileUploaderDropzoneInstructions"] {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: .5rem !important;
+}
 [data-testid="stFileUploaderDropzoneInstructions"] *,
-[data-testid="stFileUploaderDropzone"] p,
 [data-testid="stFileUploaderDropzone"] span,
 [data-testid="stFileUploaderDropzone"] small,
 [data-testid="stFileUploaderDropzone"] div {
-  color: #111111 !important;
   font-family: 'Times New Roman', Times, Georgia, serif !important;
 }
-[data-testid="stFileUploader"] svg {
-  fill: #555555 !important;
+/* primary line — "Drag and drop file here" */
+[data-testid="stFileUploaderDropzoneInstructions"] > div > span:first-child {
+  font-size: 1.06rem !important;
+  font-weight: 700 !important;
+  color: var(--navy) !important;
+  letter-spacing: .2px !important;
 }
-/* browse files button */
-[data-testid="stFileUploaderDropzoneButton"],
-[data-testid="stFileUploaderDropzoneButton"] button {
-  background: #FFFFFF !important;
-  background-color: #FFFFFF !important;
-  background-image: none !important;
-  color: #111111 !important;
-  border: 1.5px solid #AAAAAA !important;
+/* secondary line — size limit / accepted formats */
+[data-testid="stFileUploaderDropzoneInstructions"] > div > span:last-child {
+  font-size: .76rem !important;
+  color: var(--txt2) !important;
+  font-style: italic !important;
+}
+/* upload glyph */
+[data-testid="stFileUploaderDropzoneInstructions"] svg {
+  width: 40px !important;
+  height: 40px !important;
+  fill: var(--navy) !important;
+  opacity: .88 !important;
+  transition: transform .3s ease, opacity .3s ease !important;
+}
+[data-testid="stFileUploaderDropzone"]:hover
+  [data-testid="stFileUploaderDropzoneInstructions"] svg {
+  transform: translateY(-3px) !important;
+  opacity: 1 !important;
+}
+
+/* the Browse button (real 1.55 selector) */
+[data-testid="stFileUploaderDropzone"] [data-testid="stBaseButton-secondary"] {
+  background: var(--navy) !important;
+  color: #FFFFFF !important;
+  border: 1px solid var(--navy) !important;
   border-radius: 8px !important;
-  padding: .45rem 1.1rem !important;
+  padding: .6rem 1.7rem !important;
+  margin-top: .35rem !important;
+  min-height: 0 !important;
+  height: auto !important;
   font-family: 'Times New Roman', Times, Georgia, serif !important;
-  font-size: .85rem !important;
-  font-weight: 600 !important;
-  cursor: pointer !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  box-shadow: none !important;
+  font-size: .8rem !important;
+  font-weight: 700 !important;
+  letter-spacing: .9px !important;
+  text-transform: uppercase !important;
+  box-shadow: 0 2px 8px rgba(27,50,82,0.22) !important;
+  transition: background .2s ease, transform .15s ease, box-shadow .2s ease !important;
 }
-[data-testid="stFileUploaderDropzoneButton"]:hover,
-[data-testid="stFileUploaderDropzoneButton"] button:hover {
-  background: #F0F0F0 !important;
-  background-color: #F0F0F0 !important;
+[data-testid="stFileUploaderDropzone"] [data-testid="stBaseButton-secondary"] p {
+  font-size: .8rem !important;
+  font-weight: 700 !important;
+  letter-spacing: .9px !important;
 }
+[data-testid="stFileUploaderDropzone"] [data-testid="stBaseButton-secondary"]:hover {
+  background: var(--navy-mid) !important;
+  border-color: var(--navy-mid) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 14px rgba(27,50,82,0.28) !important;
+}
+[data-testid="stFileUploaderDropzone"] [data-testid="stBaseButton-secondary"]:active {
+  transform: translateY(0) !important;
+}
+
+/* uploaded-file summary row (after a file is chosen) */
+[data-testid="stFileUploaderFile"] {
+  font-family: 'Times New Roman', Times, Georgia, serif !important;
+  color: var(--txt1) !important;
+}
+[data-testid="stFileUploaderFileName"] { color: var(--navy) !important; font-weight: 600 !important; }
+[data-testid="stFileUploaderDeleteBtn"] svg { fill: var(--txt2) !important; }
 
 /* ── SIDEBAR ── */
 [data-testid="stSidebar"] {
@@ -750,24 +896,6 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
 }
 .tip-ttl { font-size: .82rem; font-weight: 700; color: var(--navy); margin-bottom: .25rem; }
 .tip-txt  { font-size: .78rem; color: var(--txt1); line-height: 1.6; font-style: italic; }
-
-/* ── EMPTY STATE ── */
-.empty-state {
-  text-align: center;
-  padding: 3rem 2rem;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  box-shadow: var(--sd0);
-}
-.empty-monogram {
-  font-size: 2.8rem;
-  font-weight: 700;
-  color: var(--border2);
-  letter-spacing: -2px;
-  margin-bottom: .75rem;
-  font-style: italic;
-}
 
 /* ── FEATURE CARDS ── */
 .feat-card {
@@ -992,6 +1120,143 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
 # ──────────────────────────────────────────────
+# SIDEBAR TOGGLE
+# Injects a "Hide Panel" button into the sidebar (below the guidelines) and a
+# floating "Show Panel" tab that appears when the sidebar is collapsed. The
+# sidebar is slid out with a negative margin so the main content reflows to
+# full width. State persists on the parent window across Streamlit reruns.
+# ──────────────────────────────────────────────
+components.html("""
+<script>
+(function(){
+  var pwin = window.parent, pdoc = pwin.document;
+  function sidebar(){ return pdoc.querySelector('[data-testid="stSidebar"]'); }
+
+  function ensureStyles(){
+    if (pdoc.getElementById('derm-toggle-style')) return;
+    var s = pdoc.createElement('style');
+    s.id = 'derm-toggle-style';
+    s.textContent = `
+      [data-testid="stSidebar"]{
+        transition: margin-left .35s cubic-bezier(0.4,0,0.2,1) !important;
+      }
+      #derm-hide-btn{
+        display:flex; align-items:center; justify-content:center; gap:8px;
+        width:calc(100% - 1.5rem); margin:.1rem .75rem 1.5rem; padding:.72rem 1rem;
+        cursor:pointer; background:#FFFFFF; color:#1B3252;
+        border:1px solid #1B3252; border-radius:10px;
+        font-family:'Times New Roman',Times,Georgia,serif;
+        font-size:.7rem; font-weight:700; letter-spacing:1.6px; text-transform:uppercase;
+        transition:background .2s ease,color .2s ease,box-shadow .2s ease;
+      }
+      #derm-hide-btn:hover{
+        background:#1B3252; color:#FFFFFF; box-shadow:0 4px 14px rgba(27,50,82,.25);
+      }
+      #derm-handle{
+        position:fixed; top:50%; left:0; transform:translateY(-50%);
+        z-index:1000000; display:none;
+        flex-direction:column; align-items:center; justify-content:center; gap:1px;
+        width:30px; height:70px; padding-left:3px;
+        background:#1B3252; color:#FFFFFF; border:none;
+        border-radius:0 36px 36px 0;
+        cursor:grab; user-select:none; touch-action:none;
+        box-shadow:3px 2px 16px rgba(27,50,82,.34);
+        font-family:'Times New Roman',Times,Georgia,serif;
+        transition:background .2s ease, box-shadow .2s ease;
+      }
+      #derm-handle:hover{ background:#2A4A72; box-shadow:4px 3px 22px rgba(27,50,82,.44); }
+      #derm-handle.dragging{ cursor:grabbing; transition:background .2s ease; }
+      #derm-handle .chev{ font-size:.92rem; line-height:.78; font-weight:700; opacity:.92; }
+      body.derm-hidden #derm-handle{ display:flex; }
+    `;
+    pdoc.head.appendChild(s);
+  }
+
+  function applyState(){
+    var sb = sidebar(); if(!sb) return;
+    var hidden = !!pwin.__dermHidden;
+    var w = sb.getBoundingClientRect().width || 300;
+    var target = hidden ? (-(w+4) + 'px') : '0px';
+    if (sb.style.marginLeft !== target) sb.style.marginLeft = target;
+    pdoc.body.classList.toggle('derm-hidden', hidden);
+  }
+
+  function setHidden(v){ pwin.__dermHidden = v; applyState(); }
+
+  function ensureHideBtn(){
+    if (pdoc.getElementById('derm-hide-btn')) return;
+    var host = pdoc.querySelector('[data-testid="stSidebarUserContent"]')
+            || pdoc.querySelector('[data-testid="stSidebarContent"]');
+    if (!host) return;
+    var b = pdoc.createElement('button');
+    b.id = 'derm-hide-btn'; b.type = 'button';
+    b.innerHTML = '<span style="font-size:1rem;line-height:1;">&lsaquo;</span> Hide Panel';
+    b.addEventListener('click', function(){ setHidden(true); });
+    host.appendChild(b);
+  }
+
+  function ensureHandle(){
+    if (pdoc.getElementById('derm-handle')) return;
+    var b = pdoc.createElement('div');
+    b.id = 'derm-handle';
+    b.setAttribute('role', 'button');
+    b.setAttribute('aria-label', 'Show panel');
+    b.setAttribute('title', 'Drag right or click to show the panel');
+    b.innerHTML = '<span class="chev">&gt;</span>'
+                + '<span class="chev">&gt;</span>'
+                + '<span class="chev">&gt;</span>';
+
+    var dragging = false, startX = 0, startLeft = 0, moved = 0;
+    function maxLeft(){ return Math.min(280, (pwin.innerWidth || 900) - 60); }
+
+    b.addEventListener('pointerdown', function(e){
+      dragging = true; moved = 0; startX = e.clientX;
+      startLeft = parseInt(b.style.left || '0', 10) || 0;
+      b.classList.add('dragging');
+      try { b.setPointerCapture(e.pointerId); } catch(err){}
+      e.preventDefault();
+    });
+    b.addEventListener('pointermove', function(e){
+      if (!dragging) return;
+      var dx = e.clientX - startX;
+      moved = Math.max(moved, Math.abs(dx));
+      var nl = Math.max(0, Math.min(maxLeft(), startLeft + dx));
+      b.style.left = nl + 'px';
+    });
+    function endDrag(e){
+      if (!dragging) return;
+      dragging = false; b.classList.remove('dragging');
+      var dx = ((e && e.clientX) || startX) - startX;
+      if (moved < 6 || dx > 56){      // a tap, or a deliberate drag to the right
+        setHidden(false);
+        b.style.left = '0px';         // reset for next time
+      }
+      // a small left/partial drag just leaves the handle where it was dropped
+    }
+    b.addEventListener('pointerup', endDrag);
+    b.addEventListener('pointercancel', endDrag);
+
+    pdoc.body.appendChild(b);
+  }
+
+  function tick(){ ensureStyles(); ensureHandle(); ensureHideBtn(); applyState(); }
+
+  tick();
+  [120,300,600,1200].forEach(function(t){ setTimeout(tick, t); });
+
+  if (!pwin.__dermObserver){
+    var pending = false;
+    pwin.__dermObserver = new MutationObserver(function(){
+      if (pending) return; pending = true;
+      requestAnimationFrame(function(){ pending = false; tick(); });
+    });
+    pwin.__dermObserver.observe(pdoc.body, { childList:true, subtree:true });
+  }
+})();
+</script>
+""", height=0, scrolling=False)
+
+# ──────────────────────────────────────────────
 # HERO
 # ──────────────────────────────────────────────
 st.markdown("""
@@ -1029,12 +1294,12 @@ if st.session_state.current_analysis is None:
     _, mid, _ = st.columns([1, 2, 1])
     with mid:
         st.markdown("""
-        <div class="g-card">
-          <div class="g-card-header">
+        <div class="upload-panel fade">
+          <div class="upload-head">
             <div class="g-accent"></div>
             <div>
               <div class="g-title">Upload Skin Image</div>
-              <div class="g-sub">High-resolution, well-lit photographs produce the most accurate analysis.</div>
+              <div class="g-sub">Drag a photograph into the area below, or browse your files to begin.</div>
             </div>
           </div>
         </div>
@@ -1046,44 +1311,6 @@ if st.session_state.current_analysis is None:
             label_visibility="collapsed",
         )
 
-        components.html("""
-<script>
-(function() {
-  function fix() {
-    try {
-      var doc = window.parent.document;
-      var btn = doc.querySelector('[data-testid="stFileUploaderDropzoneButton"]');
-      if (!btn) return;
-      var leaves = [];
-      btn.querySelectorAll('*').forEach(function(el) {
-        if (el.children.length === 0 && el.textContent.trim()) {
-          leaves.push(el);
-        }
-      });
-      if (leaves.length > 1) {
-        for (var i = 0; i < leaves.length - 1; i++) {
-          leaves[i].style.setProperty('display', 'none', 'important');
-          leaves[i].style.setProperty('visibility', 'hidden', 'important');
-          leaves[i].style.setProperty('font-size', '0', 'important');
-          leaves[i].style.setProperty('width', '0', 'important');
-          leaves[i].style.setProperty('height', '0', 'important');
-          leaves[i].style.setProperty('position', 'absolute', 'important');
-        }
-      }
-    } catch(e) {}
-  }
-  fix();
-  [200, 500, 1000, 2000].forEach(function(t){ setTimeout(fix, t); });
-  try {
-    new MutationObserver(fix).observe(
-      window.parent.document.body,
-      { childList: true, subtree: true }
-    );
-  } catch(e) {}
-})();
-</script>
-""", height=0, scrolling=False)
-
         if uploaded_file:
             img = Image.open(uploaded_file)
             if img.mode != "RGB":
@@ -1091,6 +1318,7 @@ if st.session_state.current_analysis is None:
             w, h  = img.size
             fsize = uploaded_file.size / 1024
 
+            st.markdown('<div class="sec-lbl">Selected Image</div>', unsafe_allow_html=True)
             st.image(img, use_container_width=True)
             st.markdown(
                 f'<div style="margin:.65rem 0;">'
@@ -1111,20 +1339,15 @@ if st.session_state.current_analysis is None:
                         st.session_state.current_image    = img
                         st.session_state.analysis_history.append(result)
                         st.session_state.chat_messages    = []
+                        st.session_state.pending_q        = None
                         st.rerun()
                     except Exception as exc:
                         st.error(f"Analysis failed: {exc}")
         else:
             st.markdown("""
-            <div class="empty-state">
-              <div class="empty-monogram">Rx</div>
-              <div style="font-size:.92rem;font-weight:700;color:#4A4845;margin-bottom:.35rem;">
-                No Image Selected
-              </div>
-              <div style="font-size:.81rem;color:#8A8785;font-style:italic;line-height:1.65;">
-                Accepted formats: JPG, PNG, WebP<br>
-                For best results, use a clear close-up in natural lighting.
-              </div>
+            <div class="upload-hint">
+              Accepted formats: JPG, PNG, WebP &nbsp;&mdash;&nbsp; maximum 200 MB.
+              For the most accurate analysis, use a clear, close-up photograph taken in natural light.
             </div>
             """, unsafe_allow_html=True)
 
@@ -1266,17 +1489,19 @@ else:
 
             rfs = analysis.get("risk_factors", [])
             if rfs:
-                rf_html = """
+                rf_rows = "".join(
+                    f'<div class="list-row"><span class="list-dot" '
+                    f'style="background:#8B2A2A;"></span>{r}</div>'
+                    for r in rfs
+                )
+                st.markdown(f"""
                 <div class="g-card fade">
                   <div class="g-card-header">
                     <div class="g-accent" style="background:#8B2A2A;"></div>
                     <div class="g-title">Identified Risk Factors</div>
                   </div>
-                  <div class="risk-tags">"""
-                for r in rfs:
-                    rf_html += f'<span class="risk-tag">{r}</span>'
-                rf_html += "</div></div>"
-                st.markdown(rf_html, unsafe_allow_html=True)
+                  {rf_rows}
+                </div>""", unsafe_allow_html=True)
 
             wtsd = analysis.get("when_to_see_doctor", [])
             sct  = analysis.get("self_care_tips", [])
@@ -1320,29 +1545,38 @@ else:
                 st.session_state.current_analysis = None
                 st.session_state.current_image    = None
                 st.session_state.chat_messages    = []
+                st.session_state.pending_q        = None
                 st.rerun()
 
     # ── TAB 2 ────────────────────────────────
     with tab_chat:
         st.markdown('<div class="sec-lbl">AI Consultation</div>', unsafe_allow_html=True)
 
-        if st.session_state.chat_messages:
-            bubbles = ""
-            for m in st.session_state.chat_messages:
+        def _fmt(text):
+            # escape so AI/user text can't break the bubble markup; keep line breaks
+            return html_lib.escape(text).replace("\n", "<br>")
+
+        def _bubbles(messages):
+            out = ""
+            for m in messages:
                 if m["role"] == "user":
-                    bubbles += (
-                        f'<div class="chat-user">'
-                        f'<div class="bubble-user">{m["content"]}</div></div>'
-                    )
+                    out += (f'<div class="chat-user">'
+                            f'<div class="bubble-user">{_fmt(m["content"])}</div></div>')
                 else:
-                    bubbles += (
-                        f'<div class="chat-ai">'
-                        f'<div class="ai-label">AI</div>'
-                        f'<div class="bubble-ai">{m["content"]}</div></div>'
-                    )
-            st.markdown(f'<div class="chat-box">{bubbles}</div>', unsafe_allow_html=True)
-        else:
-            st.markdown("""
+                    out += (f'<div class="chat-ai"><div class="ai-label">AI</div>'
+                            f'<div class="bubble-ai">{_fmt(m["content"])}</div></div>')
+            return out
+
+        pending   = st.session_state.get("pending_q")
+        chat_slot = st.empty()
+
+        if st.session_state.chat_messages:
+            chat_slot.markdown(
+                f'<div class="chat-box">{_bubbles(st.session_state.chat_messages)}</div>',
+                unsafe_allow_html=True,
+            )
+        elif not pending:
+            chat_slot.markdown("""
             <div style="text-align:center;padding:2rem;background:#FFFFFF;
                         border:1px solid #E4E0D8;border-radius:14px;
                         margin-bottom:1rem;box-shadow:0 1px 3px rgba(27,50,82,.06),
@@ -1372,12 +1606,7 @@ else:
             with sq_cols[i % 2]:
                 if st.button(q, key=f"sq_{i}", use_container_width=True):
                     st.session_state.chat_messages.append({"role": "user", "content": q})
-                    with st.spinner("Processing..."):
-                        try:
-                            ans = ask_followup(q, analysis, img)
-                            st.session_state.chat_messages.append({"role": "assistant", "content": ans})
-                        except Exception as exc:
-                            st.session_state.chat_messages.append({"role": "assistant", "content": f"Error: {exc}"})
+                    st.session_state.pending_q = q
                     st.rerun()
 
         with st.form("qform", clear_on_submit=True):
@@ -1385,13 +1614,39 @@ else:
             send_btn = st.form_submit_button("Submit Question", use_container_width=True)
             if send_btn and user_q.strip():
                 st.session_state.chat_messages.append({"role": "user", "content": user_q.strip()})
-                with st.spinner("Processing..."):
-                    try:
-                        ans = ask_followup(user_q.strip(), analysis, img)
-                        st.session_state.chat_messages.append({"role": "assistant", "content": ans})
-                    except Exception as exc:
-                        st.session_state.chat_messages.append({"role": "assistant", "content": f"Error: {exc}"})
+                st.session_state.pending_q = user_q.strip()
                 st.rerun()
+
+        # Answer a pending question: hold a brief "thinking" beat, then type the
+        # reply out live, character by character, rather than dropping it in at once.
+        if pending:
+            base     = _bubbles(st.session_state.chat_messages)
+            thinking = ('<div class="chat-ai"><div class="ai-label">AI</div>'
+                        '<div class="bubble-ai thinking"><span class="think-text">'
+                        'Reviewing your question against the analysis&hellip;</span>'
+                        '</div></div>')
+            chat_slot.markdown(f'<div class="chat-box">{base}{thinking}</div>',
+                               unsafe_allow_html=True)
+            time.sleep(1.0)
+
+            full = ""
+            try:
+                for delta in ask_followup_stream(analysis, img):
+                    full += delta
+                    typing = ('<div class="chat-ai"><div class="ai-label">AI</div>'
+                              f'<div class="bubble-ai">{_fmt(full)}'
+                              '<span class="type-caret"></span></div></div>')
+                    chat_slot.markdown(f'<div class="chat-box">{base}{typing}</div>',
+                                       unsafe_allow_html=True)
+                    time.sleep(0.012)
+                if not full.strip():
+                    full = "I could not generate a response. Please try again."
+            except Exception as exc:
+                full = f"Error: {exc}"
+
+            st.session_state.chat_messages.append({"role": "assistant", "content": full})
+            st.session_state.pending_q = None
+            st.rerun()
 
     # ── TAB 3 ────────────────────────────────
     with tab_dl:

@@ -1,4 +1,4 @@
-groq
-streamlit
-pillow
-python-dotenv
+groq==1.1.1
+streamlit==1.55.0
+pillow==12.1.1
+python-dotenv==1.2.2
