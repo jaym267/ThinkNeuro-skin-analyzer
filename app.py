@@ -1176,12 +1176,19 @@ components.html("""
         transition:left .35s cubic-bezier(0.4,0,0.2,1), background .2s ease, box-shadow .2s ease;
       }
       #derm-handle:hover{ background:#2A4A72; box-shadow:4px 3px 22px rgba(27,50,82,.44); }
-      #derm-handle .chev{
-        font-size:.92rem; line-height:.78; font-weight:700; opacity:.92;
-        transition:transform .3s ease;
+      /* a single chevron arrow that points the way the panel will move */
+      #derm-handle .derm-arrow{
+        width:11px; height:11px; margin-left:-3px;
+        border-top:2.5px solid #FFFFFF;
+        border-right:2.5px solid #FFFFFF;
+        transform:rotate(45deg);            /* points right = show */
+        transition:transform .3s ease, margin-left .3s ease;
       }
-      /* when the panel is open, flip the chevrons to point back at it (hide) */
-      #derm-handle.derm-open .chev{ transform:scaleX(-1); }
+      /* when the panel is open, flip the arrow to point back at it = hide */
+      #derm-handle.derm-open .derm-arrow{
+        margin-left:3px;
+        transform:rotate(-135deg);          /* points left = hide */
+      }
     `;
     pdoc.head.appendChild(s);
   }
@@ -1222,9 +1229,7 @@ components.html("""
     b.setAttribute('tabindex', '0');
     b.setAttribute('aria-label', 'Show or hide the panel');
     b.setAttribute('title', 'Show or hide the panel');
-    b.innerHTML = '<span class="chev">&gt;</span>'
-                + '<span class="chev">&gt;</span>'
-                + '<span class="chev">&gt;</span>';
+    b.innerHTML = '<span class="derm-arrow"></span>';
     b.addEventListener('click', function(){ setHidden(!pwin.__dermHidden); });
     b.addEventListener('keydown', function(e){
       if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); setHidden(!pwin.__dermHidden); }
