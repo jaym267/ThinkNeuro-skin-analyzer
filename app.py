@@ -48,6 +48,29 @@ PROB_STYLES = {
     "LOW":    {"bar": "#2B5C8A", "badge_bg": "rgba(43,92,138,0.08)",  "badge_color": "#2B5C8A", "badge_border": "rgba(43,92,138,0.25)", "pct": 20},
 }
 
+# Plain-language skin tips (sourced from the American Academy of Dermatology).
+# The sidebar shows three at a time and rotates to the next three every 10 min.
+SKIN_TIPS = [
+    ("Sunscreen Every Day",        "Put on sunscreen rated SPF 30 or higher every morning before you head out — even on cloudy days."),
+    ("Wash Your Face Twice a Day", "Clean your face when you wake up, before bed, and after sweating to clear off oil, dirt, and germs."),
+    ("Go Easy — Don't Scrub", "Wash with warm water and your fingertips in gentle circles; hard scrubbing irritates skin and can worsen breakouts."),
+    ("Moisturize While Damp",      "Smooth on moisturizer within a few minutes of washing, while your skin is still a little wet, to lock in moisture."),
+    ("Keep Showers Short",         "Keep baths and showers to about 5–10 minutes with warm — not hot — water so your skin doesn't dry out."),
+    ("Pat Dry, Don't Rub",         "After washing, gently pat your skin dry with a towel instead of rubbing, then moisturize right away."),
+    ("Add Moisture to the Air",    "Run a humidifier in dry rooms or during winter to help your skin hold on to water."),
+    ("Skip Tanning Beds",          "Tanning beds and harsh sun cause wrinkles, dark spots, and skin cancer; use a self-tanner if you want color."),
+    ("Check Your Skin Monthly",    "Once a month, look for new spots or moles that itch, bleed, or change — caught early, skin cancer is very treatable."),
+    ("Don't Smoke",                "Smoking speeds up wrinkles and slows healing, so quitting helps your skin look and feel healthier."),
+    ("Match Products to Your Skin","Choose cleansers and creams made for your skin type — oily, dry, or sensitive — not just any product."),
+    ("Fragrance-Free if Sensitive","If your skin gets irritated easily, pick fragrance-free products and avoid harsh, alcohol-based ones."),
+    ("Keep Stress in Check",       "Stress can set off acne, eczema, and rosacea, so make time to relax and unwind."),
+    ("Protect Your Hands",         "Wear gloves while washing dishes or cleaning so soap and water don't dry out and crack your skin."),
+    ("Wear Soft, Loose Cotton",    "Pick soft, loose cotton clothing; tight or scratchy fabrics like wool can irritate sensitive skin."),
+    ("Keep It Simple",             "Using too many products at once can irritate your skin — add new ones one at a time."),
+    ("Shave After a Warm Shower",  "Shave once warm water has softened your skin, use a sharp blade, and moisturize right afterward."),
+    ("Get Enough Sleep",           "Your skin repairs itself overnight, so aim for 7–9 hours to help keep it healthy."),
+]
+
 # ──────────────────────────────────────────────
 # GROQ CLIENT
 # ──────────────────────────────────────────────
@@ -1050,6 +1073,26 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
 # ──────────────────────────────────────────────
 # SIDEBAR
 # ──────────────────────────────────────────────
+@st.fragment(run_every=600)   # auto-reruns every 10 minutes
+def render_skin_tips():
+    # Show three tips, advancing to the next three every 10-minute window so the
+    # panel keeps cycling through the full list on its own.
+    per    = 3
+    n      = len(SKIN_TIPS)
+    start  = (int(time.time() // 600) * per) % n
+    chosen = [SKIN_TIPS[(start + i) % n] for i in range(per)]
+    cards  = "".join(
+        f'<div class="tip-card"><div class="tip-rule"></div>'
+        f'<div class="tip-ttl">{title}</div>'
+        f'<div class="tip-txt">{text}</div></div>'
+        for title, text in chosen
+    )
+    st.markdown(
+        f'<div class="sb-section"><div class="sb-title">Skin Health Guidelines</div>'
+        f'{cards}</div>',
+        unsafe_allow_html=True,
+    )
+
 with st.sidebar:
     st.markdown("""
     <div class="sb-logo">
@@ -1118,26 +1161,7 @@ with st.sidebar:
         hist_html += "</div>"
         st.markdown(hist_html, unsafe_allow_html=True)
 
-    st.markdown("""
-    <div class="sb-section">
-      <div class="sb-title">Skin Health Guidelines</div>
-      <div class="tip-card">
-        <div class="tip-rule"></div>
-        <div class="tip-ttl">Sun Protection</div>
-        <div class="tip-txt">Apply SPF 30+ sunscreen daily. UV exposure is the leading cause of premature skin damage and elevated carcinoma risk.</div>
-      </div>
-      <div class="tip-card">
-        <div class="tip-rule"></div>
-        <div class="tip-ttl">Hydration</div>
-        <div class="tip-txt">Maintain adequate water intake and moisturise twice daily to preserve the skin's protective barrier function.</div>
-      </div>
-      <div class="tip-card">
-        <div class="tip-rule"></div>
-        <div class="tip-ttl">Gentle Cleansing</div>
-        <div class="tip-txt">Use fragrance-free, pH-balanced cleansers. Excessive washing disrupts the skin's natural protective lipid layer.</div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+    render_skin_tips()
 
 # ──────────────────────────────────────────────
 # SIDEBAR TOGGLE
