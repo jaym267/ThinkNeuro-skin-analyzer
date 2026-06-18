@@ -6,7 +6,9 @@ import base64
 import datetime
 import io
 import time
+import threading
 import html as html_lib
+from collections import deque
 import streamlit as st
 import streamlit.components.v1 as components
 from PIL import Image
@@ -95,12 +97,103 @@ def get_client():
 client = get_client()
 
 # ──────────────────────────────────────────────
+# RATE LIMITING
+# Protects the shared Groq API key on a public deployment: a global cap across
+# all visitors (guards your quota and stays under Groq's own per-minute limit)
+# plus a per-session cap (stops one visitor hammering or double-clicking).
+# Tune these numbers to taste.
+# ──────────────────────────────────────────────
+RATE_LIMITS = {
+    "global_per_min": 20,    # total model calls/minute across everyone
+    "global_per_day": 800,   # total model calls/day across everyone
+    "session_per_min": 8,    # model calls/minute from a single visitor
+}
+
+@st.cache_resource
+def _global_rate_state():
+    # Shared across all sessions in the server process (one per deployment).
+    return {"events": deque(), "lock": threading.Lock()}
+
+def acquire_request_slot():
+    """Reserve one model-call slot. Returns (ok, message). Only records the
+    call when both the per-session and global limits allow it."""
+    now = time.time()
+
+    # per-session window (this visitor)
+    sdq = st.session_state.setdefault("_req_times", deque())
+    while sdq and now - sdq[0] > 60:
+        sdq.popleft()
+    if len(sdq) >= RATE_LIMITS["session_per_min"]:
+        wait = int(60 - (now - sdq[0])) + 1
+        return False, f"You're going a bit fast — please wait about {wait} seconds and try again."
+
+    # global window (everyone), committed atomically
+    state = _global_rate_state()
+    with state["lock"]:
+        gdq = state["events"]
+        while gdq and now - gdq[0] > 86400:
+            gdq.popleft()
+        per_min = sum(1 for t in gdq if now - t <= 60)
+        if per_min >= RATE_LIMITS["global_per_min"]:
+            return False, "The analyzer is handling a lot of requests right now. Please wait a moment and try again."
+        if len(gdq) >= RATE_LIMITS["global_per_day"]:
+            return False, "The analyzer has reached today's usage limit. Please check back tomorrow."
+        gdq.append(now)
+    sdq.append(now)
+    return True, ""
+
+# ──────────────────────────────────────────────
+# INPUT LIMITS
+# ──────────────────────────────────────────────
+MAX_UPLOAD_MB   = 10            # reject image files larger than this
+MAX_IMAGE_PIXELS = 25_000_000   # ~25 MP guard against decompression bombs
+MAX_IMAGE_DIM   = 2000          # downscale longest side before sending to the model
+MAX_QUESTION_CHARS = 500        # cap on a follow-up question's length
+
+# Refuse to even decode absurdly large images (Pillow decompression-bomb guard).
+Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+
+# ──────────────────────────────────────────────
 # HELPERS
 # ──────────────────────────────────────────────
 def image_to_base64(img: Image.Image) -> str:
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=90)
     return base64.b64encode(buf.getvalue()).decode()
+
+def load_validated_image(uploaded_file):
+    """Validate and safely decode an uploaded image.
+    Returns (PIL.Image or None, error_message). Rejects oversized, malformed,
+    or decompression-bomb files and downscales very large images."""
+    size = getattr(uploaded_file, "size", None)
+    if size is not None and size > MAX_UPLOAD_MB * 1024 * 1024:
+        return None, f"That image is too large ({size/1_000_000:.1f} MB). Please upload one under {MAX_UPLOAD_MB} MB."
+
+    data = uploaded_file.getvalue()
+    if not data:
+        return None, "That file is empty. Please upload a valid image."
+
+    # First pass: verify the bytes really are a parseable image.
+    try:
+        with Image.open(io.BytesIO(data)) as probe:
+            probe.verify()
+    except Exception:
+        return None, "That file doesn't look like a valid image. Please upload a JPG, PNG, or WebP photo."
+
+    # Second pass: actually decode it (verify() leaves the image unusable).
+    try:
+        img = Image.open(io.BytesIO(data))
+        img.load()
+    except Image.DecompressionBombError:
+        return None, "That image has too many pixels to process safely. Please use a smaller photo."
+    except Exception:
+        return None, "That image could not be read. Please try another photo."
+
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    if max(img.size) > MAX_IMAGE_DIM:        # keep the payload to the model reasonable
+        img.thumbnail((MAX_IMAGE_DIM, MAX_IMAGE_DIM))
+    return img, ""
 
 def parse_analysis(text: str) -> dict:
     out = {
@@ -1148,12 +1241,12 @@ with st.sidebar:
               <div class="hist-dot" style="background:{style['color']};
                    box-shadow:0 0 0 3px {style['bg']};"></div>
               <div style="flex:1;min-width:0;">
-                <div class="hist-cond">{top}</div>
+                <div class="hist-cond">{html_lib.escape(top)}</div>
                 <div style="display:flex;align-items:center;gap:6px;margin-top:3px;">
                   <span style="font-size:.62rem;padding:2px 8px;border-radius:100px;
                                background:{style['bg']};color:{style['color']};
                                border:1px solid {style['border']};font-weight:700;
-                               letter-spacing:.5px;">{lvl}</span>
+                               letter-spacing:.5px;">{html_lib.escape(lvl)}</span>
                   <span class="hist-time">{ts}</span>
                 </div>
               </div>
@@ -1334,41 +1427,46 @@ if st.session_state.current_analysis is None:
         )
 
         if uploaded_file:
-            img = Image.open(uploaded_file)
-            if img.mode != "RGB":
-                img = img.convert("RGB")
-            w, h  = img.size
-            fsize = uploaded_file.size / 1024
+            img, img_err = load_validated_image(uploaded_file)
+            if img_err:
+                st.error(img_err)
+            else:
+                w, h  = img.size
+                fsize = uploaded_file.size / 1024
 
-            st.markdown('<div class="sec-lbl">Selected Image</div>', unsafe_allow_html=True)
-            st.image(img, use_container_width=True)
-            st.markdown(
-                f'<div style="margin:.65rem 0;">'
-                f'<span class="info-chip">{w} &times; {h} px</span>'
-                f'<span class="info-chip">{fsize:.1f} KB</span>'
-                f'<span class="info-chip">{img.mode}</span>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
+                st.markdown('<div class="sec-lbl">Selected Image</div>', unsafe_allow_html=True)
+                st.image(img, use_container_width=True)
+                st.markdown(
+                    f'<div style="margin:.65rem 0;">'
+                    f'<span class="info-chip">{w} &times; {h} px</span>'
+                    f'<span class="info-chip">{fsize:.1f} KB</span>'
+                    f'<span class="info-chip">{img.mode}</span>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
 
-            if st.button("Analyze Skin Condition", use_container_width=True):
-                with st.spinner("Analyzing image — please wait..."):
-                    try:
-                        result = analyze_image(img)
-                        result["timestamp"] = datetime.datetime.now().strftime("%H:%M")
-                        result["filename"]  = uploaded_file.name
-                        st.session_state.current_analysis = result
-                        st.session_state.current_image    = img
-                        st.session_state.analysis_history.append(result)
-                        st.session_state.chat_messages    = []
-                        st.session_state.pending_q        = None
-                        st.rerun()
-                    except Exception as exc:
-                        st.error(f"Analysis failed: {exc}")
+                if st.button("Analyze Skin Condition", use_container_width=True):
+                    ok, limit_msg = acquire_request_slot()
+                    if not ok:
+                        st.warning(limit_msg)
+                        st.stop()
+                    with st.spinner("Analyzing image — please wait..."):
+                        try:
+                            result = analyze_image(img)
+                            result["timestamp"] = datetime.datetime.now().strftime("%H:%M")
+                            result["filename"]  = uploaded_file.name
+                            st.session_state.current_analysis = result
+                            st.session_state.current_image    = img
+                            st.session_state.analysis_history.append(result)
+                            st.session_state.chat_messages    = []
+                            st.session_state.pending_q        = None
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"Analysis failed: {exc}")
         else:
             st.markdown("""
             <div class="upload-hint">
-              Accepted formats: JPG, PNG, WebP &nbsp;&mdash;&nbsp; maximum 200 MB.
+              Accepted formats: JPG, PNG, WebP &nbsp;&mdash;&nbsp; maximum 10 MB.
               For the most accurate analysis, use a clear, close-up photograph taken in natural light.
             </div>
             """, unsafe_allow_html=True)
@@ -1443,7 +1541,7 @@ else:
 
             rec    = analysis.get("recommended_action", "SEE_DOCTOR")
             acfg   = ACTION_CONFIGS.get(rec, ACTION_CONFIGS["SEE_DOCTOR"])
-            detail = analysis.get("action_detail", "Please consult a medical professional.")
+            detail = html_lib.escape(analysis.get("action_detail", "Please consult a medical professional."))
             st.markdown(f"""
             <div class="act-card fade"
                  style="background:{acfg['bg']};border-color:{acfg['border']};
@@ -1454,7 +1552,7 @@ else:
             """, unsafe_allow_html=True)
 
         with col_r:
-            vd = analysis.get("visual_description", "")
+            vd = html_lib.escape(analysis.get("visual_description", ""))
             if vd:
                 st.markdown('<div class="sec-lbl">Clinical Observations</div>', unsafe_allow_html=True)
                 st.markdown(f"""
@@ -1483,8 +1581,8 @@ else:
                 for c in conds:
                     lvl  = c.get("level", "MEDIUM")
                     ps   = PROB_STYLES.get(lvl, PROB_STYLES["MEDIUM"])
-                    name = c.get("name", "Unknown")
-                    desc = c.get("description", "")
+                    name = html_lib.escape(c.get("name", "Unknown"))
+                    desc = html_lib.escape(c.get("description", ""))
                     cond_html += f"""
                   <div class="cond-card">
                     <div style="display:flex;justify-content:space-between;
@@ -1492,7 +1590,7 @@ else:
                       <div class="cond-name">{name}</div>
                       <span class="prob-badge"
                             style="background:{ps['badge_bg']};color:{ps['badge_color']};
-                                   border-color:{ps['badge_border']};">{lvl}</span>
+                                   border-color:{ps['badge_border']};">{html_lib.escape(lvl)}</span>
                     </div>
                     <div class="cond-bar">
                       <div class="cond-fill"
@@ -1513,7 +1611,7 @@ else:
             if rfs:
                 rf_rows = "".join(
                     f'<div class="list-row"><span class="list-dot" '
-                    f'style="background:#8B2A2A;"></span>{r}</div>'
+                    f'style="background:#8B2A2A;"></span>{html_lib.escape(r)}</div>'
                     for r in rfs
                 )
                 st.markdown(f"""
@@ -1533,7 +1631,7 @@ else:
                     with c1:
                         rows = "".join(
                             f'<div class="list-row"><span class="list-dot" '
-                            f'style="background:#8B2A2A;"></span>{s}</div>'
+                            f'style="background:#8B2A2A;"></span>{html_lib.escape(s)}</div>'
                             for s in wtsd
                         )
                         st.markdown(f"""
@@ -1548,7 +1646,7 @@ else:
                     with c2:
                         rows = "".join(
                             f'<div class="list-row"><span class="list-dot" '
-                            f'style="background:#2E7D53;"></span>{t}</div>'
+                            f'style="background:#2E7D53;"></span>{html_lib.escape(t)}</div>'
                             for t in sct
                         )
                         st.markdown(f"""
@@ -1635,14 +1733,22 @@ else:
             user_q   = st.text_input("Question", placeholder="Enter your question here...", label_visibility="collapsed")
             send_btn = st.form_submit_button("Submit Question", use_container_width=True)
             if send_btn and user_q.strip():
-                st.session_state.chat_messages.append({"role": "user", "content": user_q.strip()})
-                st.session_state.pending_q = user_q.strip()
+                q = user_q.strip()[:MAX_QUESTION_CHARS]   # cap length before storing/sending
+                st.session_state.chat_messages.append({"role": "user", "content": q})
+                st.session_state.pending_q = q
                 st.rerun()
 
         # Answer a pending question: hold a brief "thinking" beat, then type the
         # reply out live, character by character, rather than dropping it in at once.
         if pending:
-            base     = _bubbles(st.session_state.chat_messages)
+            base = _bubbles(st.session_state.chat_messages)
+
+            ok, limit_msg = acquire_request_slot()
+            if not ok:
+                st.session_state.chat_messages.append({"role": "assistant", "content": limit_msg})
+                st.session_state.pending_q = None
+                st.rerun()
+
             thinking = ('<div class="chat-ai"><div class="ai-label">AI</div>'
                         '<div class="bubble-ai thinking"><span class="think-text">'
                         'Reviewing your question against the analysis&hellip;</span>'

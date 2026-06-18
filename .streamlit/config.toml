@@ -5,3 +5,10 @@ backgroundColor="#F7F4EF"
 secondaryBackgroundColor="#FFFFFF"
 textColor="#1C1C1C"
 font="serif"
+
+[server]
+# Reject oversized uploads at the framework level (default is 200 MB).
+maxUploadSize = 10
+# Keep CSRF/XSRF protection on (default) and don't expose CORS broadly.
+enableXsrfProtection = true
+enableCORS = false
