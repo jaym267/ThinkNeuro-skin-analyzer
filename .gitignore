@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 streamlit_*.log
 .claude/
+images.jpg

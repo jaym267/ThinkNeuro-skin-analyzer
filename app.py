@@ -6,6 +6,7 @@ import base64
 import datetime
 import io
 import time
+import logging
 import threading
 import html as html_lib
 from collections import deque
@@ -15,13 +16,15 @@ from PIL import Image
 from groq import Groq
 from dotenv import load_dotenv
 
+logger = logging.getLogger("dermatica")
+
 load_dotenv()
 
 # ──────────────────────────────────────────────
 # PAGE CONFIG
 # ──────────────────────────────────────────────
 st.set_page_config(
-    page_title="Dermatica Pro | Advanced Skin Analysis",
+    page_title="Dermatica | Advanced Skin Analysis",
     page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded",
@@ -124,7 +127,9 @@ def acquire_request_slot():
     while sdq and now - sdq[0] > 60:
         sdq.popleft()
     if len(sdq) >= RATE_LIMITS["session_per_min"]:
-        wait = int(60 - (now - sdq[0])) + 1
+        # sdq may be empty if the limit is configured at 0; fall back safely.
+        oldest = sdq[0] if sdq else now
+        wait = max(1, int(60 - (now - oldest)) + 1)
         return False, f"You're going a bit fast — please wait about {wait} seconds and try again."
 
     # global window (everyone), committed atomically
@@ -149,6 +154,8 @@ MAX_UPLOAD_MB   = 10            # reject image files larger than this
 MAX_IMAGE_PIXELS = 25_000_000   # ~25 MP guard against decompression bombs
 MAX_IMAGE_DIM   = 2000          # downscale longest side before sending to the model
 MAX_QUESTION_CHARS = 500        # cap on a follow-up question's length
+MAX_HISTORY_ANALYSES = 20       # cap retained analyses per session
+MAX_CHAT_MESSAGES = 20          # cap retained chat turns (also bounds tokens re-sent)
 
 # Refuse to even decode absurdly large images (Pillow decompression-bomb guard).
 Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
@@ -305,7 +312,7 @@ def ask_followup_stream(analysis: dict, img: Image.Image):
     Reads st.session_state.chat_messages, whose final entry is the pending
     user question; the image is attached to that last turn for vision context.
     """
-    b64 = image_to_base64(img)
+    b64 = st.session_state.get("current_image_b64") or image_to_base64(img)
     system = (
         "You are a helpful dermatology AI assistant. "
         f"Previous analysis:\n{analysis.get('raw','')[:1200]}\n\n"
@@ -386,7 +393,7 @@ It does NOT constitute a medical diagnosis or treatment advice.
 Always consult a licensed dermatologist or healthcare provider.
 
 -------------------------------------
-Dermatica Pro | Powered by Groq & Llama AI
+Dermatica | Powered by Groq & Llama AI
 """
 
 # ──────────────────────────────────────────────
@@ -397,6 +404,7 @@ for k, v in {
     "chat_messages":    [],
     "current_analysis": None,
     "current_image":    None,
+    "current_image_b64": None,
     "pending_q":        None,
 }.items():
     if k not in st.session_state:
@@ -1191,7 +1199,7 @@ with st.sidebar:
     <div class="sb-logo">
       <div style="font-size:.65rem;letter-spacing:3px;text-transform:uppercase;
                   color:#B8882A;margin-bottom:.5rem;">Advanced Skin Analysis</div>
-      <div style="font-size:1.45rem;font-weight:700;color:#1B3252;letter-spacing:-.3px;">Dermatica Pro</div>
+      <div style="font-size:1.45rem;font-weight:700;color:#1B3252;letter-spacing:-.3px;">Dermatica</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1377,7 +1385,7 @@ components.html("""
 st.markdown("""
 <div class="hero">
   <div class="hero-eyebrow">AI-Powered Dermatology Assistant</div>
-  <h1 class="hero-title">Dermatica Pro</h1>
+  <h1 class="hero-title">Dermatica</h1>
   <p class="hero-sub">Advanced skin condition analysis powered by multimodal AI. Upload a photograph for structured clinical insights in seconds.</p>
   <div class="status-bar">
     <div class="s-pill"><span class="s-dot"></span>Real-time Analysis</div>
@@ -1394,7 +1402,7 @@ st.markdown("""
 st.markdown("""
 <div class="disclaimer">
   <strong style="color:#1B3252;">Medical Disclaimer &mdash;</strong>
-  Dermatica Pro provides AI-generated insights for <em>educational and informational purposes only</em>.
+  Dermatica provides AI-generated insights for <em>educational and informational purposes only</em>.
   This tool does not constitute a medical diagnosis or replace professional medical advice.
   Always consult a licensed dermatologist or qualified healthcare professional for accurate
   diagnosis and appropriate treatment.
@@ -1455,14 +1463,18 @@ if st.session_state.current_analysis is None:
                             result = analyze_image(img)
                             result["timestamp"] = datetime.datetime.now().strftime("%H:%M")
                             result["filename"]  = uploaded_file.name
-                            st.session_state.current_analysis = result
-                            st.session_state.current_image    = img
+                            st.session_state.current_analysis  = result
+                            st.session_state.current_image     = img
+                            st.session_state.current_image_b64 = image_to_base64(img)
                             st.session_state.analysis_history.append(result)
+                            st.session_state.analysis_history = \
+                                st.session_state.analysis_history[-MAX_HISTORY_ANALYSES:]
                             st.session_state.chat_messages    = []
                             st.session_state.pending_q        = None
                             st.rerun()
                         except Exception as exc:
-                            st.error(f"Analysis failed: {exc}")
+                            logger.exception("Analysis failed")
+                            st.error("Analysis failed. Please try again in a moment.")
         else:
             st.markdown("""
             <div class="upload-hint">
@@ -1745,9 +1757,11 @@ else:
 
             ok, limit_msg = acquire_request_slot()
             if not ok:
-                st.session_state.chat_messages.append({"role": "assistant", "content": limit_msg})
+                # Surface the limit transiently; do NOT store it as an assistant
+                # turn (that would be replayed to the model as conversation history).
                 st.session_state.pending_q = None
-                st.rerun()
+                st.warning(limit_msg)
+                st.stop()
 
             thinking = ('<div class="chat-ai"><div class="ai-label">AI</div>'
                         '<div class="bubble-ai thinking"><span class="think-text">'
@@ -1755,10 +1769,12 @@ else:
                         '</div></div>')
             chat_slot.markdown(f'<div class="chat-box">{base}{thinking}</div>',
                                unsafe_allow_html=True)
-            time.sleep(1.0)
+            time.sleep(1.0)   # brief, intentional "thinking" beat
 
             full = ""
             try:
+                # Renders incrementally as stream chunks arrive (typewriter effect)
+                # without an artificial per-chunk delay.
                 for delta in ask_followup_stream(analysis, img):
                     full += delta
                     typing = ('<div class="chat-ai"><div class="ai-label">AI</div>'
@@ -1766,13 +1782,14 @@ else:
                               '<span class="type-caret"></span></div></div>')
                     chat_slot.markdown(f'<div class="chat-box">{base}{typing}</div>',
                                        unsafe_allow_html=True)
-                    time.sleep(0.012)
                 if not full.strip():
                     full = "I could not generate a response. Please try again."
-            except Exception as exc:
-                full = f"Error: {exc}"
+            except Exception:
+                logger.exception("Follow-up chat failed")
+                full = "Sorry, I couldn't complete that response. Please try again."
 
             st.session_state.chat_messages.append({"role": "assistant", "content": full})
+            st.session_state.chat_messages = st.session_state.chat_messages[-MAX_CHAT_MESSAGES:]
             st.session_state.pending_q = None
             st.rerun()
 
@@ -1813,7 +1830,7 @@ else:
 st.markdown("""
 <div class="app-footer">
   <div class="footer-rule"></div>
-  Dermatica Pro &nbsp;&mdash;&nbsp; Powered by Groq &amp; Llama AI &nbsp;&mdash;&nbsp; For Educational Use Only
+  Dermatica &nbsp;&mdash;&nbsp; Powered by Groq &amp; Llama AI &nbsp;&mdash;&nbsp; For Educational Use Only
   <br>Always consult a licensed dermatologist for professional medical advice.
 </div>
 """, unsafe_allow_html=True)
