@@ -1,4 +1,8 @@
 groq==1.1.1
 streamlit==1.55.0
 pillow==12.1.1
+fpdf2==2.8.7
 python-dotenv==1.2.2
+psycopg[binary]==3.2.13
+psycopg-pool==3.2.8
+plotly==5.24.1
