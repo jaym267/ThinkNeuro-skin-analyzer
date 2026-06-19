@@ -82,6 +82,20 @@ class DatabaseNotConfiguredError(RuntimeError):
     """Raised when DATABASE_URL is missing/empty when a pool is requested."""
 
 
+def is_configured() -> bool:
+    """True when a DATABASE_URL secret is present, i.e. DB-backed persistence
+    can be attempted.
+
+    Callers use this to *skip* DB work entirely when it isn't configured
+    (the common local-dev / no-DB case), rather than calling into the DB
+    helpers and catching DatabaseNotConfiguredError on every single rerun —
+    which floods the logs with full tracebacks for a perfectly expected
+    "no database" state. When this returns False, treat DB persistence as
+    simply absent and continue with in-session state only.
+    """
+    return bool(get_secret("DATABASE_URL"))
+
+
 @st.cache_resource
 def get_pool() -> ConnectionPool:
     """Return a process-wide, cached connection pool to the Supabase/Postgres

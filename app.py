@@ -20,15 +20,21 @@ logger = logging.getLogger(__name__)
 # Self-provisions a fresh Supabase project's schema on first run. The app has
 # no login requirement and DB persistence is best-effort only, so a missing/
 # unreachable DATABASE_URL must NOT break the core analyze flow — soft-fail
-# with a log entry instead of st.stop()'ing the whole app.
-try:
-    db.init_schema()
-except Exception:
-    logger.warning(
-        "Database schema bootstrap skipped (DATABASE_URL not configured or "
-        "unreachable). Continuing without DB-backed features.",
-        exc_info=True,
-    )
+# instead of st.stop()'ing the whole app.
+#
+# When DATABASE_URL simply isn't set (local dev, or a deploy without a DB),
+# skip silently: that's an expected, supported mode, not an error worth a
+# traceback on every rerun. Only when a URL *is* configured but the bootstrap
+# still fails do we log the exception — that's a real problem worth seeing.
+if db.is_configured():
+    try:
+        db.init_schema()
+    except Exception:
+        logger.warning(
+            "Database schema bootstrap failed; continuing without DB-backed "
+            "features.",
+            exc_info=True,
+        )
 
 # ──────────────────────────────────────────────
 # PAGE CONFIG
@@ -74,7 +80,11 @@ load_css("static/styles.css", dark=st.session_state.get("dark_mode", False))
 # harmless-but-wasteful at best (load_history() already returns a fresh,
 # correctly-ordered list each time) — the explicit guard is still kept so a
 # later change to this block can't accidentally start duplicating entries.
-if not st.session_state.get("history_seeded") and not st.session_state.analysis_history:
+if (
+    db.is_configured()
+    and not st.session_state.get("history_seeded")
+    and not st.session_state.analysis_history
+):
     try:
         st.session_state.analysis_history = db.load_history(db.get_default_user_id())
     except Exception:
@@ -112,7 +122,7 @@ st.markdown("""
 # ──────────────────────────────────────────────
 st.markdown("""
 <div class="disclaimer">
-  <strong style="color:#1B3252;">Medical Disclaimer &mdash;</strong>
+  <strong style="color:var(--navy);">Medical Disclaimer &mdash;</strong>
   Dermatica provides AI-generated insights for <em>educational and informational purposes only</em>.
   This tool does not constitute a medical diagnosis or replace professional medical advice.
   Always consult a licensed dermatologist or qualified healthcare professional for accurate

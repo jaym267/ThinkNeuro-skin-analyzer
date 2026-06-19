@@ -180,18 +180,18 @@ def _render_settings_control():
 
 def render_sidebar():
     with st.sidebar:
-        st.markdown(f"""
+        st.markdown("""
         <div class="sb-logo">
           <div style="font-size:.65rem;letter-spacing:3px;text-transform:uppercase;
-                      color:{styles.BRAND['gold']};margin-bottom:.5rem;">Advanced Skin Analysis</div>
-          <div style="font-size:1.45rem;font-weight:700;color:{styles.BRAND['navy']};letter-spacing:-.3px;">Dermatica</div>
+                      color:var(--gold);margin-bottom:.5rem;">Advanced Skin Analysis</div>
+          <div style="font-size:1.45rem;font-weight:700;color:var(--navy);letter-spacing:-.3px;">Dermatica</div>
         </div>
         """, unsafe_allow_html=True)
 
         st.markdown("""
         <div class="sb-section">
           <div class="sb-title">System Status</div>
-          <div style="font-size:.81rem;color:#4A4845;line-height:2.3;">
+          <div style="font-size:.81rem;color:var(--txt1);line-height:2.3;">
             <span class="status-dot"></span>AI Engine Online<br>
             <span class="status-dot"></span>Groq API Connected<br>
             <span class="status-dot"></span>Vision Model Active
@@ -205,16 +205,16 @@ def render_sidebar():
         <div class="sb-section">
           <div class="sb-title">Session Statistics</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.1rem;">
-            <div style="text-align:center;padding:.85rem .5rem;background:#FFFFFF;
-                        border:1px solid #E4E0D8;border-radius:10px;">
-              <div style="font-size:1.7rem;font-weight:700;color:{styles.BRAND['navy']};line-height:1;">{n_scans}</div>
-              <div style="font-size:.6rem;color:#B8B5B0;text-transform:uppercase;
+            <div style="text-align:center;padding:.85rem .5rem;background:var(--white);
+                        border:1px solid var(--border);border-radius:10px;">
+              <div style="font-size:1.7rem;font-weight:700;color:var(--navy);line-height:1;">{n_scans}</div>
+              <div style="font-size:.6rem;color:var(--txt3);text-transform:uppercase;
                           letter-spacing:1.5px;margin-top:.25rem;">Scans</div>
             </div>
-            <div style="text-align:center;padding:.85rem .5rem;background:#FFFFFF;
-                        border:1px solid #E4E0D8;border-radius:10px;">
-              <div style="font-size:1.7rem;font-weight:700;color:{styles.BRAND['navy']};line-height:1;">{n_chats}</div>
-              <div style="font-size:.6rem;color:#B8B5B0;text-transform:uppercase;
+            <div style="text-align:center;padding:.85rem .5rem;background:var(--white);
+                        border:1px solid var(--border);border-radius:10px;">
+              <div style="font-size:1.7rem;font-weight:700;color:var(--navy);line-height:1;">{n_chats}</div>
+              <div style="font-size:.6rem;color:var(--txt3);text-transform:uppercase;
                           letter-spacing:1.5px;margin-top:.25rem;">Q&amp;A</div>
             </div>
           </div>

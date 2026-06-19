@@ -77,9 +77,9 @@ def render_condition_card(condition: dict) -> str:
     </div>
     <div style="display:flex;justify-content:space-between;
                 margin-top:.45rem;align-items:flex-start;">
-      <div style="font-size:.79rem;color:#8A8785;line-height:1.5;
+      <div style="font-size:.79rem;color:var(--txt2);line-height:1.5;
                   font-style:italic;flex:1;">{desc}</div>
-      <div style="font-size:.7rem;color:#B8B5B0;flex-shrink:0;
+      <div style="font-size:.7rem;color:var(--txt3);flex-shrink:0;
                   margin-left:10px;">~{ps['pct']}%</div>
     </div>
   </div>"""

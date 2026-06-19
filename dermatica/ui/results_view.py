@@ -26,7 +26,7 @@ def _persist_chat_message(analysis_id, role: str, content: str) -> None:
     time) or the DB call itself errors, skip persistence silently rather
     than breaking the chat UI that already works without it.
     """
-    if not analysis_id:
+    if not analysis_id or not db.is_configured():
         return
     try:
         db.save_chat_message(analysis_id, role, content)
@@ -47,7 +47,7 @@ def render_severity_trend(history: list[dict]) -> None:
     if len(history) < 2:
         st.markdown("""
         <div class="g-card fade">
-          <div style="font-size:.85rem;color:#8A8785;font-style:italic;text-align:center;padding:.5rem 0;">
+          <div style="font-size:.85rem;color:var(--txt2);font-style:italic;text-align:center;padding:.5rem 0;">
             Come back after a few scans to see your severity trend over time.
           </div>
         </div>
@@ -82,15 +82,25 @@ def render_severity_trend(history: list[dict]) -> None:
             "top_condition": "Top Condition",
         },
     )
-    fig.update_traces(mode="markers+lines", line=dict(color="#B8B5B0", width=1.5))
+    # Match the chart surface to the active theme so it doesn't show as a white
+    # box in dark mode. These mirror the card/text/border values in
+    # styles.DARK_THEME / LIGHT_THEME (the plotly figure can't read CSS vars).
+    dark = st.session_state.get("dark_mode", False)
+    surface   = "#2A2E37" if dark else "#FFFFFF"
+    txt_color = "#EDEBE6" if dark else "#1A1918"
+    grid      = "#3A3F49" if dark else "#E4E0D8"
+    line_clr  = "#76726B" if dark else "#B8B5B0"
+
+    fig.update_traces(mode="markers+lines", line=dict(color=line_clr, width=1.5))
     fig.update_layout(
         margin=dict(l=10, r=10, t=10, b=10),
         height=320,
-        plot_bgcolor="#FFFFFF",
-        paper_bgcolor="#FFFFFF",
+        plot_bgcolor=surface,
+        paper_bgcolor=surface,
+        font=dict(color=txt_color),
         legend_title_text="Severity Level",
-        yaxis=dict(range=[0, 10.5], title="Severity Score"),
-        xaxis=dict(title="Scan Time"),
+        yaxis=dict(range=[0, 10.5], title="Severity Score", gridcolor=grid, zerolinecolor=grid),
+        xaxis=dict(title="Scan Time", gridcolor=grid, zerolinecolor=grid),
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -167,7 +177,7 @@ def render_results_view() -> None:
                     <div class="g-accent"></div>
                     <div class="g-title">What the AI Observed</div>
                   </div>
-                  <div style="font-size:.89rem;line-height:1.82;color:#4A4845;
+                  <div style="font-size:.89rem;line-height:1.82;color:var(--txt1);
                               font-style:italic;">{vd}</div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -247,21 +257,20 @@ def render_results_view() -> None:
             )
         elif not pending:
             chat_slot.markdown("""
-            <div style="text-align:center;padding:2rem;background:#FFFFFF;
-                        border:1px solid #E4E0D8;border-radius:14px;
-                        margin-bottom:1rem;box-shadow:0 1px 3px rgba(27,50,82,.06),
-                        0 4px 16px rgba(27,50,82,.07);">
-              <div style="font-size:.95rem;font-weight:700;color:#4A4845;margin-bottom:.4rem;">
+            <div style="text-align:center;padding:2rem;background:var(--white);
+                        border:1px solid var(--border);border-radius:14px;
+                        margin-bottom:1rem;box-shadow:var(--sd0);">
+              <div style="font-size:.95rem;font-weight:700;color:var(--txt1);margin-bottom:.4rem;">
                 Ask About Your Results
               </div>
-              <div style="font-size:.82rem;color:#8A8785;font-style:italic;">
+              <div style="font-size:.82rem;color:var(--txt2);font-style:italic;">
                 Submit a question below to receive additional clinical context from the AI.
               </div>
             </div>
             """, unsafe_allow_html=True)
 
         st.markdown(
-            '<div style="font-size:.68rem;color:#B8B5B0;text-transform:uppercase;'
+            '<div style="font-size:.68rem;color:var(--txt3);text-transform:uppercase;'
             'letter-spacing:2px;margin-bottom:.65rem;">Suggested Questions</div>',
             unsafe_allow_html=True
         )

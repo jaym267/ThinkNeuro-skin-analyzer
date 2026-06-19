@@ -20,6 +20,9 @@ html, body, .main, [data-testid="stAppViewContainer"] {
 }
 
 #MainMenu, footer, header { visibility: hidden; }
+/* The header element keeps a painted background even while its contents are
+   hidden; make it transparent so it never shows a light strip in dark mode. */
+[data-testid="stHeader"] { background: transparent !important; }
 .stDeployButton { display: none !important; }
 .block-container { padding: 0 2.5rem 4rem !important; max-width: 1380px !important; }
 
@@ -299,7 +302,7 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
 .think-text {
   font-style: italic;
   font-size: .86rem;
-  background: linear-gradient(90deg, #C9C5BE 0%, #1B3252 50%, #C9C5BE 100%);
+  background: linear-gradient(90deg, var(--txt3) 0%, var(--navy) 50%, var(--txt3) 100%);
   background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;
@@ -406,7 +409,7 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
 /* the drop area itself — tall, centered, calm */
 [data-testid="stFileUploaderDropzone"] {
   background:
-    radial-gradient(120% 140% at 50% 0%, #FFFFFF 0%, var(--cream) 100%) !important;
+    radial-gradient(120% 140% at 50% 0%, var(--white) 0%, var(--cream) 100%) !important;
   border: 1.5px dashed var(--border2) !important;
   border-radius: 16px !important;
   padding: 2.6rem 2rem !important;
@@ -742,4 +745,139 @@ h1, h2, h3, h4, h5, h6, p, span, div, label, input, button, a, li, td, th {
   border-radius: 10px !important;
 }
 .stSpinner > div { border-color: var(--navy) transparent transparent !important; }
+
+/* ════════════════════════════════════════════════════════════════════
+   NATIVE STREAMLIT WIDGET THEMING  (dark-mode completeness)
+   ────────────────────────────────────────────────────────────────────
+   .streamlit/config.toml pins base="light", so Streamlit's own widgets
+   (expander, forms, inputs, selectbox, code, form/download buttons)
+   render on a permanently-light surface and would stay light when our
+   var()-driven dark theme is active. Every rule below resolves through
+   the same var(--xxx) tokens that flip in dark mode — so in LIGHT mode
+   these are effectively no-ops (they resolve to the same light values
+   Streamlit already uses) and in DARK mode they flip the widget to
+   match the rest of the app. Always use var(), never raw hex, here. */
+
+/* ── MATERIAL ICONS ──
+   Keep Streamlit's Material icon glyphs (the expander chevron, etc.) on
+   their icon font. The global serif `!important` rule near the top of
+   this file otherwise forces serif onto the icon <span>, which breaks
+   the ligature so the icon renders as its literal source text
+   ("keyboard_arrow_down") and overlaps the adjacent label — this is what
+   made the "What does ABCDE stand for?" expander header unreadable. */
+span[data-testid="stIconMaterial"],
+[data-testid="stExpanderToggleIcon"],
+.material-icons, .material-icons-outlined,
+.material-symbols-rounded, .material-symbols-outlined {
+  font-family:
+    'Material Symbols Rounded', 'Material Symbols Outlined',
+    'Material Icons', 'Material Icons Outlined' !important;
+}
+
+/* ── EXPANDER ── */
+[data-testid="stExpander"] details {
+  background: var(--white) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 12px !important;
+}
+[data-testid="stExpander"] summary {
+  background: transparent !important;   /* show the details' themed surface */
+  color: var(--txt0) !important;
+}
+[data-testid="stExpander"] summary:hover { color: var(--navy) !important; }
+[data-testid="stExpander"] summary svg { fill: var(--txt2) !important; }
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] {
+  background: var(--white) !important;
+}
+
+/* ── FORMS ── */
+[data-testid="stForm"] {
+  background: var(--white) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 14px !important;
+}
+
+/* ── WIDGET LABELS (slider / selectbox / radio / text inputs) ── */
+[data-testid="stWidgetLabel"] label,
+[data-testid="stWidgetLabel"] p {
+  color: var(--txt1) !important;
+}
+
+/* ── TEXT INPUT / TEXT AREA (BaseWeb wrappers + the field itself) ──
+   Streamlit nests the field inside BaseWeb wrapper <div>s that each carry
+   their own light background; theming only the <input>/<textarea> leaves
+   those wrappers white in dark mode, so target the root elements too. */
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-testid="stTextInputRootElement"],
+[data-testid="stTextAreaRootElement"],
+[data-baseweb="input"],
+[data-baseweb="base-input"],
+[data-baseweb="textarea"] {
+  background: var(--white) !important;
+  color: var(--txt0) !important;
+  border-color: var(--border) !important;
+}
+
+/* ── SELECTBOX (BaseWeb) ── */
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-baseweb="select"] > div {
+  background: var(--white) !important;
+  border-color: var(--border) !important;
+  color: var(--txt0) !important;
+}
+[data-baseweb="popover"] [role="listbox"] { background: var(--white) !important; }
+[data-baseweb="popover"] [role="option"]  { color: var(--txt0) !important; }
+
+/* ── RADIO ── */
+[data-testid="stRadio"] label,
+[data-testid="stRadio"] div { color: var(--txt0) !important; }
+
+/* ── SLIDER ── */
+[data-testid="stSlider"] [data-testid="stTickBar"],
+[data-testid="stSlider"] [data-testid="stTickBarMin"],
+[data-testid="stSlider"] [data-testid="stTickBarMax"] { color: var(--txt2) !important; }
+/* the unfilled portion of the slider track (BaseWeb paints it with the
+   light secondary-background colour) */
+[data-testid="stSlider"] [data-baseweb="slider"] > div > div { background: var(--cream2) !important; }
+
+/* ── CODE BLOCK (report preview) ── */
+[data-testid="stCode"],
+[data-testid="stCode"] pre,
+[data-testid="stCode"] code {
+  background: var(--cream2) !important;
+  color: var(--txt0) !important;
+}
+
+/* ── ALERTS (st.warning / st.success / st.error / st.info) ── */
+[data-testid="stAlertContainer"] { color: var(--txt0) !important; }
+
+/* ── TOGGLE / CHECKBOX LABELS ── */
+[data-testid="stCheckbox"] label,
+[data-testid="stToggle"] label,
+[data-testid="stWidgetLabel"] { color: var(--txt1) !important; }
+
+/* ── FORM-SUBMIT + DOWNLOAD BUTTONS ──
+   These are NOT `.stButton`, so the brand button styling above misses
+   them and they fall back to Streamlit's light default. Theme them to
+   match (navy fill, white label) in both modes. */
+[data-testid="stFormSubmitButton"] > button,
+[data-testid="stDownloadButton"] > button {
+  background: var(--navy) !important;
+  color: #FFFFFF !important;
+  border: none !important;
+  border-radius: 8px !important;
+  font-family: 'Times New Roman', Times, Georgia, serif !important;
+  font-weight: 700 !important;
+  letter-spacing: .6px !important;
+  text-transform: uppercase !important;
+  box-shadow: 0 2px 8px rgba(27,50,82,0.22) !important;
+  transition: background .2s ease, transform .15s ease, box-shadow .2s ease !important;
+}
+[data-testid="stFormSubmitButton"] > button:hover,
+[data-testid="stDownloadButton"] > button:hover {
+  background: var(--navy-mid) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 16px rgba(27,50,82,0.30) !important;
+}
 

@@ -112,29 +112,32 @@ def render_upload_view() -> None:
                             st.session_state.pending_q        = None
 
                             # Persist to the DB so this analysis survives a
-                            # browser refresh / redeploy. Soft-fail: a DB
-                            # hiccup must not break the in-session analyze
-                            # flow that already works without persistence
-                            # (same philosophy as app.py's init_schema()
-                            # call). On success, stash the new row's id onto
-                            # the result dict so later chat messages in
+                            # browser refresh / redeploy. Skip entirely when no
+                            # DATABASE_URL is configured (expected local/no-DB
+                            # mode); only attempt — and soft-fail with a logged
+                            # traceback — when a DB *is* configured but the
+                            # write fails. A DB hiccup must not break the
+                            # in-session analyze flow that already works without
+                            # persistence. On success, stash the new row's id
+                            # onto the result dict so later chat messages in
                             # results_view.py can link to it.
-                            try:
-                                thumbnail_b64 = image_to_thumbnail_base64(img)
-                                new_id = db.save_analysis(
-                                    db.get_default_user_id(),
-                                    result,
-                                    uploaded_file.name,
-                                    thumbnail_b64,
-                                    st.session_state.get("symptom_intake"),
-                                )
-                                result["id"] = new_id
-                            except Exception:
-                                logger.warning(
-                                    "Failed to persist analysis to DB; "
-                                    "continuing with in-session result only.",
-                                    exc_info=True,
-                                )
+                            if db.is_configured():
+                                try:
+                                    thumbnail_b64 = image_to_thumbnail_base64(img)
+                                    new_id = db.save_analysis(
+                                        db.get_default_user_id(),
+                                        result,
+                                        uploaded_file.name,
+                                        thumbnail_b64,
+                                        st.session_state.get("symptom_intake"),
+                                    )
+                                    result["id"] = new_id
+                                except Exception:
+                                    logger.warning(
+                                        "Failed to persist analysis to DB; "
+                                        "continuing with in-session result only.",
+                                        exc_info=True,
+                                    )
 
                             st.rerun()
                         except Exception:
