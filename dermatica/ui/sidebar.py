@@ -2,12 +2,15 @@
 """Sidebar: status/stats/history/skin-tips panel plus the JS-injected
 show/hide toggle handle."""
 import html as html_lib
+import logging
 import time
 
 import streamlit as st
 import streamlit.components.v1 as components
 
-from .. import styles
+from .. import db, styles
+
+logger = logging.getLogger("dermatica")
 
 # Plain-language skin tips (sourced from the American Academy of Dermatology).
 # The sidebar shows three at a time and rotates to the next three every 10 min.
@@ -168,14 +171,73 @@ def _render_sidebar_toggle():
 """, height=0, scrolling=False)
 
 
+_TEXT_SIZE_OPTIONS = ["Small", "Default", "Large"]
+
+
+def _clear_history() -> None:
+    """Reset all per-session analysis/chat state and, when a DB is
+    configured, delete the stored rows too (soft-fail so a persistence
+    hiccup never blocks the in-app reset). history_seeded is left True so
+    the just-cleared history isn't immediately re-seeded from the DB on the
+    next run within this session."""
+    for key in ("analysis_history", "chat_messages"):
+        st.session_state[key] = []
+    for key in ("current_analysis", "current_image", "current_image_b64", "pending_q"):
+        st.session_state[key] = None
+    st.session_state.history_seeded = True
+    if db.is_configured():
+        try:
+            db.clear_history(db.get_default_user_id())
+        except Exception:
+            logger.warning("Failed to clear DB analysis history.", exc_info=True)
+    st.toast("Analysis history cleared.")
+    st.rerun()
+
+
 def _render_settings_control():
-    """Renders a small "Settings" section (currently just the dark-mode
-    toggle). st.toggle already triggers a rerun on change by itself, so
-    load_css() in app.py picks up the new st.session_state["dark_mode"]
-    value on the very next run — no explicit st.rerun() needed here."""
-    st.markdown('<div class="sb-section"><div class="sb-title">Settings</div>', unsafe_allow_html=True)
-    st.toggle("Dark Mode", key="dark_mode")
-    st.markdown('</div>', unsafe_allow_html=True)
+    """Renders the sidebar Settings card: appearance controls (dark mode,
+    reduce motion, text size) and a data control (clear history).
+
+    Built with a real st.container(border=True) rather than a hand-written
+    <div>: Streamlit renders each widget as its own DOM block, so opening a
+    wrapper <div> in one st.markdown and closing it in another never
+    actually contained the widgets — the card rendered empty and the toggle
+    floated outside it. The container is styled to match the other sidebar
+    cards in static/styles.css.
+
+    The toggles/radio write straight to st.session_state via their keys and
+    trigger a rerun on change, so app.py picks up the new dark_mode /
+    reduce_motion / text_size values on the next run — no explicit rerun
+    needed for those."""
+    # key="settings_card" adds a stable `st-key-settings_card` class to the
+    # container so static/styles.css can target this one card precisely
+    # (every st.container shares the generic stVerticalBlock testid otherwise).
+    with st.container(border=True, key="settings_card"):
+        st.markdown('<div class="sb-title">Settings</div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="set-label">Appearance</div>', unsafe_allow_html=True)
+        st.toggle("Dark Mode", key="dark_mode")
+        st.toggle(
+            "Reduce Motion",
+            key="reduce_motion",
+            help="Turn off background animations and movement.",
+        )
+        st.radio(
+            "Text Size",
+            _TEXT_SIZE_OPTIONS,
+            key="text_size",
+            horizontal=True,
+        )
+
+        st.markdown('<div class="set-label">Data</div>', unsafe_allow_html=True)
+        if st.button(
+            "Clear Analysis History",
+            key="clear_history_btn",
+            use_container_width=True,
+            help="Remove all analyses and chats from this session"
+                 " (and from the database, if one is configured).",
+        ):
+            _clear_history()
 
 
 def render_sidebar():

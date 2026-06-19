@@ -58,6 +58,8 @@ for k, v in {
     "pending_q":        None,
     "symptom_intake":   None,
     "dark_mode":        False,
+    "reduce_motion":    False,
+    "text_size":        "Default",
     "history_seeded":   False,
 }.items():
     if k not in st.session_state:
@@ -67,6 +69,22 @@ for k, v in {
 # STYLES
 # ──────────────────────────────────────────────
 load_css("static/styles.css", dark=st.session_state.get("dark_mode", False))
+
+# User display preferences (set in the sidebar Settings card) layered on top
+# of the base theme. Text size always applies (Default == the 16px browser
+# baseline, i.e. a no-op); reduce-motion is opt-in and disables the app's
+# background animations/transitions for comfort and accessibility.
+_prefs = []
+if st.session_state.get("reduce_motion"):
+    _prefs.append(
+        "*,*::before,*::after{animation:none !important;"
+        "transition-duration:1ms !important;scroll-behavior:auto !important;}"
+    )
+_text_px = {"Small": "15px", "Default": "16px", "Large": "18px"}.get(
+    st.session_state.get("text_size", "Default"), "16px"
+)
+_prefs.append(f"html{{font-size:{_text_px} !important;}}")
+st.markdown(f"<style>{''.join(_prefs)}</style>", unsafe_allow_html=True)
 
 # ──────────────────────────────────────────────
 # SEED HISTORY FROM DB (once per fresh session)

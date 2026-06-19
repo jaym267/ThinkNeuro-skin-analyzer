@@ -881,3 +881,32 @@ span[data-testid="stIconMaterial"],
   box-shadow: 0 4px 16px rgba(27,50,82,0.30) !important;
 }
 
+/* ── SIDEBAR SETTINGS CARD ──
+   The Settings section is a real st.container(border=True, key="settings_card")
+   so its widgets actually sit inside the card. Streamlit tags a keyed
+   container with a stable `st-key-<key>` class; target that to style this
+   one card to match the other .sb-section cards. */
+[data-testid="stSidebar"] .st-key-settings_card {
+  background: var(--cream) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 12px !important;
+  margin: 0 .75rem .85rem !important;
+  padding: 1rem 1.1rem !important;
+}
+[data-testid="stSidebar"] .st-key-settings_card:hover {
+  box-shadow: var(--sd0) !important;
+}
+/* sub-heading inside the settings card (Appearance / Data) */
+.set-label {
+  font-size: .6rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--txt3);
+  font-weight: 700;
+  margin: .85rem 0 .1rem;
+}
+.set-label:first-of-type { margin-top: .4rem; }
+/* tighten widget spacing inside the settings card */
+[data-testid="stSidebar"] .st-key-settings_card
+  [data-testid="stElementContainer"] { margin-bottom: .15rem; }
+

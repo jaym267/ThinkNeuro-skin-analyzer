@@ -336,6 +336,20 @@ def load_history(user_id: int, limit: int = 20) -> list[dict]:
     return history
 
 
+def clear_history(user_id: int) -> None:
+    """Delete all of a user's stored analyses. The chat_messages rows are
+    removed automatically via their ON DELETE CASCADE foreign key, so this
+    one DELETE clears both tables for the user. Backs the sidebar Settings
+    "Clear Analysis History" control; callers guard with is_configured() and
+    soft-fail so a DB hiccup never blocks the in-session reset.
+    """
+    pool = get_pool()
+    with pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM analyses WHERE user_id = %s", (user_id,))
+        conn.commit()
+
+
 def load_chat_messages(analysis_id: int) -> list[dict]:
     """Load prior chat turns for an analysis, oldest first, shaped as
     {"role": ..., "content": ...} to match st.session_state.chat_messages'
