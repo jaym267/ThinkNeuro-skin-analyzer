@@ -187,6 +187,56 @@ def _validate_credentials(username: str, password: str) -> str:
     return ""
 
 
+def password_strength(password: str) -> dict:
+    """Score a password 0-4 for a signup-form strength meter (advisory UI
+    only — the hard MIN_PASSWORD_LEN rule in _validate_credentials is what's
+    actually enforced). Returns score, a label, and improvement hints.
+
+    Scoring rewards length and character variety (lower/upper/digit/symbol);
+    anything under the minimum length is capped at 'Weak' regardless of
+    variety so the meter never implies a too-short password is acceptable."""
+    if not password:
+        return {"score": 0, "label": "", "hints": []}
+
+    checks = {
+        "lower":  bool(re.search(r"[a-z]", password)),
+        "upper":  bool(re.search(r"[A-Z]", password)),
+        "digit":  bool(re.search(r"\d", password)),
+        "symbol": bool(re.search(r"[^A-Za-z0-9]", password)),
+    }
+    variety = sum(checks.values())
+    length = len(password)
+
+    score = 0
+    if length >= MIN_PASSWORD_LEN:
+        score += 1
+    if length >= 12:
+        score += 1
+    if variety >= 2:
+        score += 1
+    if variety >= 3:
+        score += 1
+    score = min(score, 4)
+    if length < MIN_PASSWORD_LEN:
+        score = min(score, 1)   # never look better than "Weak" while too short
+
+    labels = {0: "Very weak", 1: "Weak", 2: "Fair", 3: "Good", 4: "Strong"}
+
+    hints = []
+    if length < MIN_PASSWORD_LEN:
+        hints.append(f"use at least {MIN_PASSWORD_LEN} characters")
+    elif length < 12:
+        hints.append("longer is stronger (12+)")
+    if not (checks["lower"] and checks["upper"]):
+        hints.append("mix upper- and lower-case")
+    if not checks["digit"]:
+        hints.append("add a number")
+    if not checks["symbol"]:
+        hints.append("add a symbol")
+
+    return {"score": score, "label": labels[score], "hints": hints}
+
+
 def signup(username: str, password: str, confirm: str) -> tuple[bool, str]:
     username = (username or "").strip()
     err = _validate_credentials(username, password or "")
