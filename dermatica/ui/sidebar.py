@@ -8,7 +8,7 @@ import time
 import streamlit as st
 import streamlit.components.v1 as components
 
-from .. import db, styles
+from .. import auth, db, styles
 
 logger = logging.getLogger("dermatica")
 
@@ -187,7 +187,7 @@ def _clear_history() -> None:
     st.session_state.history_seeded = True
     if db.is_configured():
         try:
-            db.clear_history(db.get_default_user_id())
+            db.clear_history(auth.current_user_id())
         except Exception:
             logger.warning("Failed to clear DB analysis history.", exc_info=True)
     st.toast("Analysis history cleared.")
@@ -229,15 +229,61 @@ def _render_settings_control():
             horizontal=True,
         )
 
-        st.markdown('<div class="set-label">Data</div>', unsafe_allow_html=True)
+        # Account row + Data & Privacy only apply when accounts are enabled
+        # (a DB is configured) and someone is signed in.
+        if auth.is_enabled() and auth.is_logged_in():
+            st.markdown('<div class="set-label">Account</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div style="font-size:.78rem;color:var(--txt1);margin:.1rem 0 .4rem;">'
+                f'Signed in as <strong style="color:var(--navy);">'
+                f'{html_lib.escape(auth.current_username())}</strong></div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("Sign Out", key="signout_btn", use_container_width=True):
+                auth.logout()
+                st.toast("Signed out.")
+                st.rerun()
+
+        st.markdown('<div class="set-label">Data &amp; Privacy</div>', unsafe_allow_html=True)
         if st.button(
             "Clear Analysis History",
             key="clear_history_btn",
             use_container_width=True,
-            help="Remove all analyses and chats from this session"
-                 " (and from the database, if one is configured).",
+            help="Remove all your analyses and chats"
+                 " (from this session and, if signed in, from your saved account data).",
         ):
             _clear_history()
+
+        if auth.is_enabled() and auth.is_logged_in():
+            _render_delete_account()
+
+
+def _render_delete_account() -> None:
+    """Two-step, explicit-confirmation control for permanent account deletion.
+    Deleting an account is irreversible, so it's gated behind a checkbox the
+    user must tick in the same run before the delete button will act."""
+    st.markdown(
+        '<div style="font-size:.7rem;color:var(--txt2);font-style:italic;'
+        'margin:.6rem 0 .3rem;">Permanently delete your account and all saved '
+        'analyses and chats. This cannot be undone.</div>',
+        unsafe_allow_html=True,
+    )
+    confirm = st.checkbox(
+        "I understand this permanently deletes my account",
+        key="confirm_delete_account",
+    )
+    if st.button(
+        "Delete My Account",
+        key="delete_account_btn",
+        use_container_width=True,
+        disabled=not confirm,
+    ):
+        ok, msg = auth.delete_account()
+        if ok:
+            st.toast("Your account and data were permanently deleted.")
+            st.rerun()
+        else:
+            st.error(msg)
 
 
 def render_sidebar():

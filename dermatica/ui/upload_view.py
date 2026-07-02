@@ -5,7 +5,7 @@ import logging
 
 import streamlit as st
 
-from .. import config, db
+from .. import auth, config, db
 from ..image_utils import (
     assess_photo_quality,
     image_to_base64,
@@ -125,7 +125,7 @@ def render_upload_view() -> None:
                                 try:
                                     thumbnail_b64 = image_to_thumbnail_base64(img)
                                     new_id = db.save_analysis(
-                                        db.get_default_user_id(),
+                                        auth.current_user_id(),
                                         result,
                                         uploaded_file.name,
                                         thumbnail_b64,

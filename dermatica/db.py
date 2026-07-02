@@ -336,6 +336,67 @@ def load_history(user_id: int, limit: int = 20) -> list[dict]:
     return history
 
 
+# ──────────────────────────────────────────────────────────────────────────
+# ACCOUNTS
+# ──────────────────────────────────────────────────────────────────────────
+# Real username/password accounts (dermatica/auth.py owns the hashing +
+# session logic; these are the thin, parameterized DB queries it builds on).
+# The `users` table is the same one get_default_user_id() seeds for the no-auth
+# fallback — accounts just add rows with a real bcrypt hash in password_hash.
+
+def create_user(username: str, password_hash: str) -> int | None:
+    """Insert a new account and return its id, or None if the username is
+    already taken (ON CONFLICT DO NOTHING makes the insert a no-op, so
+    fetchone() returns no row and we surface that as None for the caller to
+    turn into a friendly 'username taken' message)."""
+    pool = get_pool()
+    with pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO users (username, password_hash) VALUES (%s, %s) "
+                "ON CONFLICT (username) DO NOTHING RETURNING id",
+                (username, password_hash),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    return row[0] if row else None
+
+
+def get_user_by_username(username: str) -> dict | None:
+    """Fetch id + password_hash for a login attempt (None if no such user)."""
+    pool = get_pool()
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                "SELECT id, username, password_hash FROM users WHERE username = %s",
+                (username,),
+            )
+            return cur.fetchone()
+
+
+def get_user_by_id(user_id: int) -> dict | None:
+    """Fetch id + username for restoring a session from a cookie token."""
+    pool = get_pool()
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                "SELECT id, username FROM users WHERE id = %s", (user_id,)
+            )
+            return cur.fetchone()
+
+
+def delete_user(user_id: int) -> None:
+    """Permanently delete an account and everything owned by it. The
+    analyses (and their chat_messages, via cascade) reference users(id) with
+    ON DELETE CASCADE, so removing the user row removes all of their data in
+    one statement — backs the Settings 'delete my account' control."""
+    pool = get_pool()
+    with pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        conn.commit()
+
+
 def clear_history(user_id: int) -> None:
     """Delete all of a user's stored analyses. The chat_messages rows are
     removed automatically via their ON DELETE CASCADE foreign key, so this

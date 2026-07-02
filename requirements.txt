@@ -6,3 +6,5 @@ python-dotenv==1.2.2
 psycopg[binary]==3.2.13
 psycopg-pool==3.2.8
 plotly==5.24.1
+bcrypt==4.2.1
+streamlit-cookies-controller==0.0.4

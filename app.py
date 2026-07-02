@@ -5,7 +5,8 @@ import logging
 import streamlit as st
 from dotenv import load_dotenv
 
-from dermatica import db
+from dermatica import auth, db
+from dermatica.ui.auth_view import render_auth_gate
 from dermatica.ui.components import load_css
 from dermatica.ui.results_view import render_results_view
 from dermatica.ui.sidebar import render_sidebar
@@ -87,6 +88,21 @@ _prefs.append(f"html{{font-size:{_text_px} !important;}}")
 st.markdown(f"<style>{''.join(_prefs)}</style>", unsafe_allow_html=True)
 
 # ──────────────────────────────────────────────
+# AUTH GATE
+# ──────────────────────────────────────────────
+# Accounts require a database. When one is configured, every visitor must be
+# signed in before the app renders — restore an existing session from the auth
+# cookie first, and otherwise show the login/create-account gate and stop.
+# When no database is configured, auth.is_enabled() is False and the app keeps
+# its original open, no-login behavior (so the live site is never broken by
+# turning on a feature that has no backing store).
+if auth.is_enabled():
+    auth.restore_session()
+    if not auth.is_logged_in():
+        render_auth_gate()
+        st.stop()
+
+# ──────────────────────────────────────────────
 # SEED HISTORY FROM DB (once per fresh session)
 # ──────────────────────────────────────────────
 # No login event exists in this no-auth app, so the seed runs once per fresh
@@ -104,7 +120,7 @@ if (
     and not st.session_state.analysis_history
 ):
     try:
-        st.session_state.analysis_history = db.load_history(db.get_default_user_id())
+        st.session_state.analysis_history = db.load_history(auth.current_user_id())
     except Exception:
         logger.warning(
             "Failed to seed analysis history from DB; continuing with an "
