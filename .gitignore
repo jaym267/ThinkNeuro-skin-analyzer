@@ -1,4 +1,9 @@
 .env
+.env.*
+!.env.example
+# Streamlit's standard local secrets file — must never be committed (it holds
+# GROQ_API_KEY / DATABASE_URL when running locally instead of via .env).
+.streamlit/secrets.toml
 __pycache__/
 *.pyc
 streamlit_*.log

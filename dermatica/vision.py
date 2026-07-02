@@ -87,7 +87,10 @@ def analyze_image(img: Image.Image, symptom_context: dict | None = None) -> dict
         max_tokens=config.ANALYZE_MAX_TOKENS,
         temperature=0.2,
     )
-    return parse_analysis(resp.choices[0].message.content)
+    # content can be None if the model returns an empty message; parse_analysis
+    # runs regexes over it, so coerce to a string to avoid a TypeError.
+    content = resp.choices[0].message.content or ""
+    return parse_analysis(content)
 
 def ask_followup_stream(analysis: dict, img: Image.Image):
     """Yield the assistant reply in chunks so it can be typed out live.
@@ -121,6 +124,11 @@ def ask_followup_stream(analysis: dict, img: Image.Image):
         stream=True,
     )
     for chunk in stream:
+        # The final streamed chunk (and some usage/keepalive chunks) can carry
+        # an empty `choices` list; guard against IndexError so a normal reply
+        # isn't cut short by an exception on the terminal chunk.
+        if not chunk.choices:
+            continue
         delta = chunk.choices[0].delta.content
         if delta:
             yield delta

@@ -9,6 +9,9 @@ font="serif"
 [server]
 # Reject oversized uploads at the framework level (default is 200 MB).
 maxUploadSize = 10
-# Keep CSRF/XSRF protection on (default) and don't expose CORS broadly.
+# Keep CSRF/XSRF protection on. We intentionally do NOT set enableCORS=false:
+# Streamlit forces CORS back on whenever XSRF protection is enabled, so setting
+# it only produced a startup warning. XSRF protection already restricts
+# cross-origin POSTs (uploads, widget updates) to same-origin, which is the
+# protection we want on a public deployment.
 enableXsrfProtection = true
-enableCORS = false
