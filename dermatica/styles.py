@@ -24,7 +24,7 @@ PROB_STYLES = {
 # Shared brand/semantic hex values, used by ui/sidebar.py and ui/components.py
 # to replace ad-hoc inline hex literals that recur across the sidebar markup
 # and the risk-factor / when-to-see-doctor / self-care cards.
-BRAND = {"navy": "#1B3252", "gold": "#B8882A"}
+BRAND = {"navy": "#1B3252", "gold": "#A8C19A"}
 SEMANTIC = {"danger": "#8B2A2A", "success": "#2E7D53"}
 
 # ──────────────────────────────────────────────
@@ -43,7 +43,7 @@ LIGHT_THEME = {
     "white":    "#FFFFFF",
     "navy":     "#1B3252",
     "navy-mid": "#2A4A72",
-    "gold":     "#B8882A",
+    "gold":     "##A8C19A",
     "txt0":     "#1A1918",
     "txt1":     "#4A4845",
     "txt2":     "#8A8785",
