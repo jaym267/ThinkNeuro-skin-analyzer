@@ -21,8 +21,8 @@ if __name__ == "__main__":
     print("Analyzing image... please wait.\n")
 
     result = analyze_image_cli(image_path)
-    print("=" * 60)
+    print("=" * 65)
     print("SKIN ANALYSIS RESULTS")
-    print("=" * 60)
+    print("=" * 65)
     print(result)
-    print("=" * 60)
+    print("=" * 65)
